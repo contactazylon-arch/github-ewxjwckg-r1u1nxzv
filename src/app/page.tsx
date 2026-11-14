@@ -1,0 +1,186 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import {
+  Activity, Bell, Bot, ChevronDown, Compass, Database, Gauge, Globe2,
+  LayoutDashboard, Search, Settings, ShieldCheck, Sparkles, Users, Plus,
+  ArrowUpRight, Server, CircleHelp, Menu, X
+} from 'lucide-react';
+
+type Lang = 'fr' | 'en';
+type Page = 'overview' | 'discover' | 'servers' | 'studio' | 'alerts' | 'settings';
+
+const copy = {
+  fr: {
+    overview:'Vue d’ensemble', discover:'Découverte', servers:'Mes serveurs', studio:'Studio créateur',
+    alerts:'Notifications', settings:'Paramètres', personal:'ESPACE PERSONNEL',
+    subtitle:'Retrouvez votre écosystème Discord en un seul endroit.',
+    add:'Ajouter un bot', serversConnected:'Serveurs connectés', listedBots:'Bots référencés',
+    monitored:'Bots surveillés', openAlerts:'Alertes ouvertes', activity:'Activité de la plateforme',
+    week:'7 derniers jours', system:'État des services', api:'API BotNexus', database:'Base de données',
+    monitoring:'Monitoring', demo:'Démonstration', recent:'Bots récemment consultés',
+    directory:'Voir l’annuaire', recommendations:'Recommandations pour votre serveur',
+    recommendation:'Vous pourriez ajouter un bot de bienvenue',
+    recommendationDetail:'Exemple de recommandation — une analyse autorisée du serveur sera nécessaire.',
+    pro:'BotNexus Pro', proText:'Débloquez les outils avancés.', explore:'Découvrir Pro',
+    search:'Rechercher des bots, catégories…', all:'Tous', moderation:'Modération',
+    music:'Musique', games:'Jeux', utility:'Utilitaires', verified:'Vérifié',
+    emptyServers:'Connectez Discord pour afficher les serveurs sur lesquels vous disposez des permissions nécessaires.',
+    connect:'Connexion Discord bientôt disponible', projects:'Vos projets créateurs',
+    create:'Créer un projet', noProjects:'Aucun projet connecté pour le moment.',
+    alertsText:'Les alertes de disponibilité nécessiteront une intégration de monitoring.',
+    account:'Compte et préférences', language:'Langue de l’interface', french:'Français', english:'Anglais',
+    sample:'Données de démonstration — aucune donnée Discord réelle n’est connectée.',
+    statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité',
+    directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
+    allBots:'Catalogue de démonstration', noResults:'Aucun bot ne correspond à cette recherche.'
+  },
+  en: {
+    overview:'Overview', discover:'Discover', servers:'My servers', studio:'Creator studio',
+    alerts:'Notifications', settings:'Settings', personal:'PERSONAL SPACE',
+    subtitle:'Your Discord ecosystem, all in one place.',
+    add:'Add a bot', serversConnected:'Connected servers', listedBots:'Listed bots',
+    monitored:'Monitored bots', openAlerts:'Open alerts', activity:'Platform activity',
+    week:'Last 7 days', system:'Service status', api:'BotNexus API', database:'Database',
+    monitoring:'Monitoring', demo:'Demo', recent:'Recently viewed bots',
+    directory:'View directory', recommendations:'Recommendations for your server',
+    recommendation:'You could add a welcome bot',
+    recommendationDetail:'Sample recommendation — authorized server analysis will be required.',
+    pro:'BotNexus Pro', proText:'Unlock advanced tools.', explore:'Explore Pro',
+    search:'Search bots, categories…', all:'All', moderation:'Moderation',
+    music:'Music', games:'Games', utility:'Utilities', verified:'Verified',
+    emptyServers:'Connect Discord to display servers where you have the required permissions.',
+    connect:'Discord connection coming soon', projects:'Your creator projects',
+    create:'Create a project', noProjects:'No connected projects yet.',
+    alertsText:'Availability alerts will require a monitoring integration.',
+    account:'Account and preferences', language:'Interface language', french:'French', english:'English',
+    sample:'Sample data — no real Discord data is connected.',
+    statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user',
+    directoryIntro:'Explore the catalogue and find tools for your communities.',
+    allBots:'Demo catalogue', noResults:'No bots match this search.'
+  }
+} as const;
+
+const demoBots = [
+  {name:'MEE6',category:'Moderation',description:'Outils de modération et de gestion communautaire.',tag:'Multi-fonctions',verified:true,letter:'M',tone:'blue'},
+  {name:'Carl-bot',category:'Utilities',description:'Automatisation, rôles et messages personnalisés.',tag:'Automatisation',verified:true,letter:'C',tone:'purple'},
+  {name:'Sapphire',category:'Moderation',description:'Gestion et modération de communautés Discord.',tag:'Modération',verified:false,letter:'S',tone:'green'},
+  {name:'Hydra',category:'Music',description:'Bot musical et outils communautaires.',tag:'Musique',verified:false,letter:'H',tone:'amber'},
+  {name:'Dank Memer',category:'Games',description:'Économie virtuelle et mini-jeux communautaires.',tag:'Économie & jeux',verified:false,letter:'D',tone:'pink'},
+];
+
+const navItems: {id:Page; icon:typeof LayoutDashboard; key:keyof typeof copy.fr}[] = [
+  {id:'overview',icon:LayoutDashboard,key:'overview'},
+  {id:'discover',icon:Compass,key:'discover'},
+  {id:'servers',icon:Server,key:'servers'},
+  {id:'studio',icon:Bot,key:'studio'},
+  {id:'alerts',icon:Bell,key:'alerts'},
+];
+
+export default function Home() {
+  const [lang,setLang] = useState<Lang>('fr');
+  const [page,setPage] = useState<Page>('overview');
+  const [query,setQuery] = useState('');
+  const [category,setCategory] = useState('All');
+  const [mobileOpen,setMobileOpen] = useState(false);
+  const t = copy[lang];
+
+  const filteredBots = useMemo(() => demoBots.filter(bot => {
+    const matchesQuery = `${bot.name} ${bot.description} ${bot.category}`.toLowerCase().includes(query.toLowerCase());
+    const matchesCategory = category === 'All' || bot.category === category;
+    return matchesQuery && matchesCategory;
+  }),[query,category]);
+
+  const title = t[page === 'overview' ? 'overview' : page];
+  const go = (next:Page) => { setPage(next); setMobileOpen(false); };
+
+  return (
+    <div className="min-h-screen">
+      <header className="sticky top-0 z-30 flex h-[68px] items-center justify-between border-b px-4 md:px-6" style={{background:'#10182a',borderColor:'var(--line)'}}>
+        <div className="flex items-center gap-3">
+          <button className="rounded-lg p-2 md:hidden hover:bg-white/5" onClick={()=>setMobileOpen(!mobileOpen)} aria-label="Toggle navigation">{mobileOpen?<X size={19}/>:<Menu size={19}/>}</button>
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl text-lg font-black text-white" style={{background:'linear-gradient(135deg,#527cff,#9560e8)'}}>B</div>
+          <div><div className="font-extrabold tracking-wide">BOT<span style={{color:'#9b85ff'}}>NEXUS</span></div><div className="text-[9px] tracking-[.18em] text-slate-400">THE DISCORD BOT ECOSYSTEM</div></div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button onClick={()=>setLang(lang==='fr'?'en':'fr')} className="rounded-lg border px-3 py-2 text-xs text-slate-300" style={{borderColor:'var(--line)'}}><Globe2 size={14} className="mr-2 inline"/>{lang.toUpperCase()} <ChevronDown size={12} className="ml-1 inline"/></button>
+          <div className="hidden text-xs text-slate-400 sm:block">{t.profile}</div>
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-900 text-xs font-bold">U</div>
+        </div>
+      </header>
+
+      <div className="flex">
+        <aside className={`${mobileOpen?'fixed inset-y-[68px] left-0 z-20 flex':'hidden'} w-[238px] shrink-0 flex-col border-r p-4 md:sticky md:top-[68px] md:flex md:h-[calc(100vh-68px)]`} style={{background:'#0e1526',borderColor:'var(--line)'}}>
+          <div className="mb-3 px-3 text-[10px] font-semibold tracking-[.16em] text-slate-500">{t.personal}</div>
+          <nav className="space-y-1">
+            {navItems.map(item=>{const Icon=item.icon;return <button key={item.id} onClick={()=>go(item.id)} className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] transition ${page===item.id?'bg-indigo-500/20 text-white':'text-slate-400 hover:bg-white/5 hover:text-white'}`}><Icon size={17}/>{t[item.key]}</button>})}
+          </nav>
+          <div className="mb-3 mt-7 px-3 text-[10px] font-semibold tracking-[.16em] text-slate-500">PERSONNEL</div>
+          <button onClick={()=>go('settings')} className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-[13px] ${page==='settings'?'bg-indigo-500/20 text-white':'text-slate-400 hover:bg-white/5'}`}><Settings size={17}/>{t.settings}</button>
+          <div className="mt-auto rounded-xl border p-3" style={{background:'#172440',borderColor:'#2c416a'}}>
+            <div className="mb-1 flex items-center gap-2 text-xs font-semibold"><Sparkles size={14} className="text-violet-300"/>{t.pro}</div>
+            <p className="mb-3 text-[11px] text-slate-400">{t.proText}</p>
+            <button onClick={()=>go('settings')} className="w-full rounded-lg px-3 py-2 text-xs font-semibold text-white" style={{background:'#6852cf'}}>{t.explore}</button>
+          </div>
+        </aside>
+
+        <main className="min-w-0 flex-1 p-4 md:p-7">
+          <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+            <div><div className="mb-1 text-[10px] font-semibold tracking-[.16em] text-slate-500">BOTNEXUS / {title.toUpperCase()}</div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="mt-1 text-xs text-slate-400">{page==='overview'?t.subtitle:page==='discover'?t.directoryIntro:''}</p></div>
+            <button onClick={()=>go(page==='studio'?'studio':'discover')} className="rounded-lg px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-950/40" style={{background:'linear-gradient(110deg,#526de0,#8059d8)'}}><Plus size={14} className="mr-1 inline"/>{page==='studio'?t.create:t.add}</button>
+          </div>
+
+          {page==='overview' && <>
+            <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+              {[
+                {label:t.serversConnected,value:'04',sub:'↑ 1 ce mois',icon:Users,color:'#8da8ff'},
+                {label:t.listedBots,value:'2 458',sub:'Catalogue public',icon:Bot,color:'#b69bff'},
+                {label:t.monitored,value:'12',sub:'11 opérationnels',icon:Activity,color:'#64dcb2'},
+                {label:t.openAlerts,value:'01',sub:'À vérifier',icon:Bell,color:'#f3c477'},
+              ].map((m,i)=>{const Icon=m.icon;return <div className="rounded-xl border p-4" style={{background:'var(--panel)',borderColor:'var(--line)'}} key={i}><div className="flex items-center justify-between text-[11px] text-slate-400">{m.label}<Icon size={16} style={{color:m.color}}/></div><div className="mt-3 text-2xl font-extrabold tracking-tight">{m.value}</div><div className="mt-1 text-[10px] text-slate-500">{m.sub}</div></div>})}
+            </div>
+            <div className="mb-4 grid gap-4 xl:grid-cols-[1.7fr_1fr]">
+              <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
+                <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-semibold">{t.activity}</h2><span className="rounded-full bg-indigo-500/15 px-2.5 py-1 text-[10px] text-indigo-200">{t.week}</span></div>
+                <div className="flex h-32 items-end gap-2 px-1">{[42,57,48,76,62,88,70].map((height,i)=><div key={i} className="flex-1 rounded-t-md" style={{height:`${height}%`,background:i===5?'#9278f4':i===3?'#6e6bd5':'#465caa'}}/>)}</div>
+                <div className="mt-2 flex justify-between text-[10px] text-slate-500">{['Lun.','Mar.','Mer.','Jeu.','Ven.','Sam.','Dim.'].map(x=><span key={x}>{x}</span>)}</div>
+                <p className="mt-4 text-[10px] text-slate-500">{t.sample}</p>
+              </section>
+              <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
+                <h2 className="mb-4 text-sm font-semibold">{t.system}</h2>
+                {[{label:t.api,ok:true},{label:t.database,ok:true},{label:t.monitoring,ok:false}].map((x,i)=><div key={i} className="flex items-center justify-between border-b border-slate-700/50 py-3 last:border-0"><div className="flex items-center gap-2 text-xs"><span className={`h-2 w-2 rounded-full ${x.ok?'bg-emerald-400':'bg-amber-400'}`}/>{x.label}</div><span className={`rounded-full px-2 py-1 text-[9px] ${x.ok?'bg-emerald-500/10 text-emerald-300':'bg-amber-500/10 text-amber-300'}`}>{x.ok?t.statusOnline:t.statusDemo}</span></div>)}
+                <p className="mt-3 text-[10px] text-slate-500">{t.sample}</p>
+              </section>
+            </div>
+            <section className="mb-4 rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
+              <div className="mb-2 flex items-center justify-between"><h2 className="text-sm font-semibold">{t.recent}</h2><button onClick={()=>go('discover')} className="text-xs text-violet-300">{t.directory} <ArrowUpRight size={13} className="inline"/></button></div>
+              <BotRows />
+            </section>
+            <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Sparkles size={15} className="text-violet-300"/>{t.recommendations}</div><p className="text-xs font-medium">{t.recommendation}</p><p className="mt-1 text-[11px] text-slate-400">{t.recommendationDetail}</p><button onClick={()=>go('discover')} className="mt-3 text-xs text-violet-300">{t.directory} →</button></section>
+          </>}
+
+          {page==='discover' && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
+            <div className="mb-4 flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={16} className="text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="w-full bg-transparent py-3 text-xs outline-none"/></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border px-3 py-2 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="All">{t.all}</option><option value="Moderation">{t.moderation}</option><option value="Music">{t.music}</option><option value="Games">{t.games}</option><option value="Utilities">{t.utility}</option></select></div>
+            <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({filteredBots.length})</span></div>
+            {filteredBots.length?filteredBots.map(bot=><div key={bot.name} className="flex items-center gap-3 border-b border-slate-700/50 py-3 last:border-0"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold" style={{background:bot.tone==='blue'?'#34466d':bot.tone==='purple'?'#49366b':bot.tone==='green'?'#245d58':'#65451e'}}>{bot.letter}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2 text-xs font-semibold">{bot.name}{bot.verified&&<span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] text-emerald-300">{t.verified}</span>}</div><p className="mt-1 text-[11px] text-slate-400">{bot.description}</p></div><span className="hidden text-[10px] text-slate-500 sm:block">{bot.tag}</span></div>):<p className="py-8 text-center text-xs text-slate-400">{t.noResults}</p>}
+            <p className="mt-4 text-[10px] text-slate-500">{t.sample}</p>
+          </section>}
+
+          {page==='servers' && <Placeholder icon={Server} title={t.connect} text={t.emptyServers}/>}
+          {page==='studio' && <Placeholder icon={Bot} title={t.projects} text={t.noProjects}/>}
+          {page==='alerts' && <Placeholder icon={Bell} title={t.alerts} text={t.alertsText}/>}
+          {page==='settings' && <section className="max-w-xl rounded-xl border p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}><h2 className="mb-4 text-sm font-semibold">{t.account}</h2><label className="mb-2 block text-xs text-slate-400">{t.language}</label><select value={lang} onChange={e=>setLang(e.target.value as Lang)} className="w-full rounded-lg border p-3 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="fr">{t.french}</option><option value="en">{t.english}</option></select></section>}
+          <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-600"><span>BOTNEXUS · THE DISCORD BOT ECOSYSTEM</span><span>Prototype UI · v0.1.0</span></footer>
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function BotRows() {
+  const rows=[['M','MEE6','Modération · Utilitaires','Vérifié'],['C','Carl-bot','Automatisation · Rôles','Vérifié'],['S','Sapphire','Modération · Gestion','Catalogue']];
+  return <div>{rows.map(([letter,name,desc,status])=><div key={name} className="flex items-center gap-3 border-b border-slate-700/50 py-3 last:border-0"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-950 font-bold">{letter}</div><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{name}</div><div className="text-[10px] text-slate-500">{desc}</div></div><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[9px] text-emerald-300">{status}</span></div>)}</div>;
+}
+function Placeholder({icon:Icon,title,text}:{icon:typeof Server;title:string;text:string}) {
+  return <section className="flex min-h-[310px] flex-col items-center justify-center rounded-xl border p-8 text-center" style={{background:'var(--panel)',borderColor:'var(--line)'}}><div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-300"><Icon size={25}/></div><h2 className="mb-2 text-sm font-semibold">{title}</h2><p className="max-w-md text-xs leading-6 text-slate-400">{text}</p><span className="mt-5 rounded-full bg-amber-500/10 px-3 py-1.5 text-[10px] text-amber-300">Intégration à venir</span></section>;
+}
