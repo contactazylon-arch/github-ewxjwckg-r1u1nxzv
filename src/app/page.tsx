@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, Bell, Bot, ChevronDown, Compass, Database, Gauge, Globe2,
   LayoutDashboard, Search, Settings, ShieldCheck, Sparkles, Users, Plus,
@@ -33,7 +33,7 @@ const copy = {
     sample:'Données de démonstration — aucune donnée Discord réelle n’est connectée.',
     statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité',
     directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
-    allBots:'Catalogue de démonstration', noResults:'Aucun bot ne correspond à cette recherche.'
+    allBots:'Catalogue Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.'
   },
   en: {
     overview:'Overview', discover:'Discover', servers:'My servers', studio:'Creator studio',
@@ -57,17 +57,12 @@ const copy = {
     sample:'Sample data — no real Discord data is connected.',
     statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user',
     directoryIntro:'Explore the catalogue and find tools for your communities.',
-    allBots:'Demo catalogue', noResults:'No bots match this search.'
+    allBots:'Topbot.gg catalogue', noResults:'No bots match this search.'
   }
 } as const;
 
-const demoBots = [
-  {name:'MEE6',category:'Moderation',description:'Outils de modération et de gestion communautaire.',tag:'Multi-fonctions',verified:true,letter:'M',tone:'blue'},
-  {name:'Carl-bot',category:'Utilities',description:'Automatisation, rôles et messages personnalisés.',tag:'Automatisation',verified:true,letter:'C',tone:'purple'},
-  {name:'Sapphire',category:'Moderation',description:'Gestion et modération de communautés Discord.',tag:'Modération',verified:false,letter:'S',tone:'green'},
-  {name:'Hydra',category:'Music',description:'Bot musical et outils communautaires.',tag:'Musique',verified:false,letter:'H',tone:'amber'},
-  {name:'Dank Memer',category:'Games',description:'Économie virtuelle et mini-jeux communautaires.',tag:'Économie & jeux',verified:false,letter:'D',tone:'pink'},
-];
+type DiscoverBot = { id:string; name:string; category:string; description:string; tag:string; verified:boolean; letter:string; tone:string; inviteUrl:string|null; websiteUrl:string|null; };
+
 
 const navItems: {id:Page; icon:typeof LayoutDashboard; key:keyof typeof copy.fr}[] = [
   {id:'overview',icon:LayoutDashboard,key:'overview'},
@@ -83,14 +78,45 @@ export default function Home() {
   const [query,setQuery] = useState('');
   const [category,setCategory] = useState('All');
   const [selectedDiscoverBot,setSelectedDiscoverBot] = useState<string | null>(null);
+  const [catalogBots, setCatalogBots] = useState<DiscoverBot[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState(false);
+
+  useEffect(() => {
+    if (page !== 'discover' || catalogBots.length > 0 || catalogLoading) return;
+    let active = true;
+    setCatalogLoading(true);
+    fetch('/api/catalog/bots?page=1&limit=50&sort=votes_month')
+      .then(response => { if (!response.ok) throw new Error('Catalogue indisponible'); return response.json(); })
+      .then(data => {
+        if (!active) return;
+        const rows = Array.isArray(data.bots) ? data.bots : [];
+        setCatalogBots(rows.map((bot: any) => ({
+          id: String(bot.id),
+          name: String(bot.name || 'Bot Discord'),
+          category: Array.isArray(bot.categories) && bot.categories.length ? String(bot.categories[0]) : 'Utilities',
+          description: String(bot.description || ''),
+          tag: Array.isArray(bot.tags) && bot.tags.length ? String(bot.tags[0]) : 'Discord bot',
+          verified: bot.verified === true,
+          letter: String(bot.name || 'B').charAt(0).toUpperCase(),
+          tone: 'blue',
+          inviteUrl: typeof bot.inviteUrl === 'string' ? bot.inviteUrl : null,
+          websiteUrl: typeof bot.websiteUrl === 'string' ? bot.websiteUrl : null
+        })));
+      })
+      .catch(() => { if (active) setCatalogError(true); })
+      .finally(() => { if (active) setCatalogLoading(false); });
+    return () => { active = false; };
+  }, [page, catalogBots.length, catalogLoading]);
+
   const [mobileOpen,setMobileOpen] = useState(false);
   const t = copy[lang];
 
-  const filteredBots = useMemo(() => demoBots.filter(bot => {
+  const filteredBots = useMemo(() => catalogBots.filter(bot => {
     const matchesQuery = `${bot.name} ${bot.description} ${bot.category}`.toLowerCase().includes(query.toLowerCase());
     const matchesCategory = category === 'All' || bot.category === category;
     return matchesQuery && matchesCategory;
-  }),[query,category]);
+  }),[catalogBots,query,category]);
 
   const title = t[page === 'overview' ? 'overview' : page];
   const go = (next:Page) => { setPage(next); setMobileOpen(false); };
@@ -163,6 +189,9 @@ export default function Home() {
           {page==='discover' && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
             <div className="mb-4 flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={16} className="text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="w-full bg-transparent py-3 text-xs outline-none"/></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border px-3 py-2 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="All">{t.all}</option><option value="Moderation">{t.moderation}</option><option value="Music">{t.music}</option><option value="Games">{t.games}</option><option value="Utilities">{t.utility}</option></select></div>
             <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({filteredBots.length})</span></div>
+            {catalogLoading && <p className="py-6 text-center text-xs text-slate-400">Chargement du catalogue réel…</p>}
+            {catalogError && <p className="py-6 text-center text-xs text-amber-300">Le catalogue est temporairement indisponible. Réessayez dans quelques instants.</p>}
+            {!catalogLoading && !catalogError && catalogBots.length === 0 && <p className="py-6 text-center text-xs text-slate-400">Aucun bot disponible pour le moment.</p>}
             
 {filteredBots.length ? filteredBots.map(bot => (
   <div
@@ -229,7 +258,7 @@ export default function Home() {
     {t.noResults}
   </p>
 )}
-           <p className="mt-4 text-[10px] text-slate-500">{t.sample}</p>
+           <p className="mt-4 text-[10px] text-slate-500">Source : Topbot.gg · Catalogue public actualisé automatiquement.</p>
           </section>}
 
           {page==='servers' && <Placeholder icon={Server} title={t.connect} text={t.emptyServers}/>}
