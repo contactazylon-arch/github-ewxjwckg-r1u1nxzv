@@ -177,10 +177,92 @@ export default function Home() {
   );
 }
 
+
 function BotRows() {
-  const rows=[['M','MEE6','Modération · Utilitaires','Vérifié'],['C','Carl-bot','Automatisation · Rôles','Vérifié'],['S','Sapphire','Modération · Gestion','Catalogue']];
-  return <div>{rows.map(([letter,name,desc,status])=><div key={name} className="flex items-center gap-3 border-b border-slate-700/50 py-3 last:border-0"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-950 font-bold">{letter}</div><div className="min-w-0 flex-1"><div className="text-xs font-semibold">{name}</div><div className="text-[10px] text-slate-500">{desc}</div></div><span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[9px] text-emerald-300">{status}</span></div>)}</div>;
+  const [selectedBot, setSelectedBot] = useState<string | null>(null);
+
+  const rows = [
+    {
+      letter: 'M',
+      name: 'MEE6',
+      desc: 'Modération · Utilitaires',
+      status: 'Vérifié',
+      details: 'Bot multifonction permettant de gérer votre communauté Discord, la modération et différentes automatisations.'
+    },
+    {
+      letter: 'C',
+      name: 'Carl-bot',
+      desc: 'Automatisation · Rôles',
+      status: 'Vérifié',
+      details: 'Bot spécialisé dans les rôles automatiques, les messages personnalisés et la gestion de votre serveur.'
+    },
+    {
+      letter: 'S',
+      name: 'Sapphire',
+      desc: 'Modération · Gestion',
+      status: 'Catalogue',
+      details: 'Bot proposant des outils de modération et de gestion pour les communautés Discord.'
+    }
+  ];
+
+  return (
+    <div className="space-y-2">
+      {rows.map((bot) => (
+        <div
+          key={bot.name}
+          className="rounded-xl border border-slate-700/50 overflow-hidden"
+        >
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedBot(
+                selectedBot === bot.name ? null : bot.name
+              )
+            }
+            aria-expanded={selectedBot === bot.name}
+            className="flex w-full items-center gap-3 p-3 text-left hover:bg-white/5 transition"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-950 font-bold">
+              {bot.letter}
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-semibold">{bot.name}</div>
+              <div className="text-[10px] text-slate-500">
+                {bot.desc}
+              </div>
+            </div>
+
+            <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[9px] text-emerald-300">
+              {bot.status}
+            </span>
+
+            <span className="text-xs text-violet-300">
+              {selectedBot === bot.name ? '−' : '+'}
+            </span>
+          </button>
+
+          {selectedBot === bot.name && (
+            <div className="border-t border-slate-700/50 p-4">
+              <h3 className="mb-2 text-sm font-semibold">
+                {bot.name}
+              </h3>
+
+              <p className="text-xs leading-6 text-slate-400">
+                {bot.details}
+              </p>
+
+              <div className="mt-3 text-[10px] text-violet-300">
+                Fiche de démonstration BotNexus
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
 }
+
 function Placeholder({icon:Icon,title,text}:{icon:typeof Server;title:string;text:string}) {
   return <section className="flex min-h-[310px] flex-col items-center justify-center rounded-xl border p-8 text-center" style={{background:'var(--panel)',borderColor:'var(--line)'}}><div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-300"><Icon size={25}/></div><h2 className="mb-2 text-sm font-semibold">{title}</h2><p className="max-w-md text-xs leading-6 text-slate-400">{text}</p><span className="mt-5 rounded-full bg-amber-500/10 px-3 py-1.5 text-[10px] text-amber-300">Intégration à venir</span></section>;
 }
