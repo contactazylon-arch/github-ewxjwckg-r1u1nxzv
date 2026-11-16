@@ -80,10 +80,11 @@ export default function Home() {
   const [selectedDiscoverBot,setSelectedDiscoverBot] = useState<string | null>(null);
   const [catalogBots, setCatalogBots] = useState<DiscoverBot[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
   const [catalogError, setCatalogError] = useState(false);
 
   useEffect(() => {
-    if (page !== 'discover' || catalogBots.length > 0 || catalogLoading) return;
+    if (page !== 'discover' || catalogLoaded || catalogLoading) return;
     let active = true;
     setCatalogLoading(true);
     fetch('/api/catalog/bots?page=1&limit=50&sort=votes_month')
@@ -105,16 +106,16 @@ export default function Home() {
         })));
       })
       .catch(() => { if (active) setCatalogError(true); })
-      .finally(() => { if (active) setCatalogLoading(false); });
+      .finally(() => { if (active) { setCatalogLoading(false); setCatalogLoaded(true); } });
     return () => { active = false; };
-  }, [page, catalogBots.length, catalogLoading]);
+  }, [page, catalogLoaded, catalogLoading]);
 
   const [mobileOpen,setMobileOpen] = useState(false);
   const t = copy[lang];
 
   const filteredBots = useMemo(() => catalogBots.filter(bot => {
     const matchesQuery = `${bot.name} ${bot.description} ${bot.category}`.toLowerCase().includes(query.toLowerCase());
-    const matchesCategory = category === 'All' || bot.category === category;
+    const matchesCategory = category === 'All' || bot.category.toLowerCase() === category.toLowerCase();
     return matchesQuery && matchesCategory;
   }),[catalogBots,query,category]);
 
