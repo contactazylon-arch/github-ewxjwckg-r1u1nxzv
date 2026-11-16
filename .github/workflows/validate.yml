@@ -47,6 +47,8 @@ jobs:
             categories: Array.isArray(validBots[0].categories) ? validBots[0].categories.length : 0,
           }));
           NODE
+      - name: Generate Cloudflare binding types
+        run: npx cf workers types
       - name: TypeScript validation
         run: npx tsc --noEmit
       - name: ESLint
