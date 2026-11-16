@@ -35,6 +35,9 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
+    // Keep upstream details in server logs so a 502 can be diagnosed without
+    // exposing provider responses or internal errors to visitors.
+    console.error("[BotNexus catalog] Topbot request failed:", error);
     const message = error instanceof Error ? error.message : "CATALOG_UNAVAILABLE";
     const rateLimited = message.startsWith("TOPBOT_RATE_LIMIT:");
     const retryAfter = rateLimited ? message.split(":")[1] : null;
