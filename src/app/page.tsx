@@ -82,6 +82,7 @@ export default function Home() {
   const [page,setPage] = useState<Page>('overview');
   const [query,setQuery] = useState('');
   const [category,setCategory] = useState('All');
+  const [selectedDiscoverBot,setSelectedDiscoverBot] = useState<string | null>(null);
   const [mobileOpen,setMobileOpen] = useState(false);
   const t = copy[lang];
 
