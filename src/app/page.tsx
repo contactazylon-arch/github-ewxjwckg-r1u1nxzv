@@ -33,7 +33,7 @@ const copy = {
     sample:'Données de démonstration — aucune donnée Discord réelle n’est connectée.',
     statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité',
     directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
-    allBots:'Catalogue Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.'
+    allBots:'Catalogue Topbot.gg', catalogSource:'Catalogue Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.'
   },
   en: {
     overview:'Overview', discover:'Discover', servers:'My servers', studio:'Creator studio',
@@ -57,7 +57,7 @@ const copy = {
     sample:'Sample data — no real Discord data is connected.',
     statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user',
     directoryIntro:'Explore the catalogue and find tools for your communities.',
-    allBots:'Topbot.gg catalogue', noResults:'No bots match this search.'
+    allBots:'Topbot.gg catalogue', catalogSource:'Topbot.gg catalogue', noResults:'No bots match this search.'
   }
 } as const;
 
@@ -94,8 +94,23 @@ export default function Home() {
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogPages, setCatalogPages] = useState(1);
   const [catalogTotal, setCatalogTotal] = useState(0);
+  const [catalogTotalCount, setCatalogTotalCount] = useState<number | null>(null);
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [catalogError, setCatalogError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/catalog/bots?page=1&limit=1&sort=votes_month')
+      .then(response => {
+        if (!response.ok) throw new Error('Catalogue indisponible');
+        return response.json();
+      })
+      .then(data => {
+        if (active) setCatalogTotalCount(Number(data.pagination?.total) || 0);
+      })
+      .catch(() => { if (active) setCatalogTotalCount(null); });
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     if (page !== 'discover' || catalogLoading) return;
@@ -194,7 +209,7 @@ export default function Home() {
             <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {[
                 {label:t.serversConnected,value:'04',sub:'↑ 1 ce mois',icon:Users,color:'#8da8ff'},
-                {label:t.listedBots,value:'2 458',sub:'Catalogue public',icon:Bot,color:'#b69bff'},
+                {label:t.listedBots,value:catalogTotalCount === null ? '…' : catalogTotalCount.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US'),sub:t.catalogSource,icon:Bot,color:'#b69bff'},
                 {label:t.monitored,value:'12',sub:'11 opérationnels',icon:Activity,color:'#64dcb2'},
                 {label:t.openAlerts,value:'01',sub:'À vérifier',icon:Bell,color:'#f3c477'},
               ].map((m,i)=>{const Icon=m.icon;return <div className="rounded-xl border p-4" style={{background:'var(--panel)',borderColor:'var(--line)'}} key={i}><div className="flex items-center justify-between text-[11px] text-slate-400">{m.label}<Icon size={16} style={{color:m.color}}/></div><div className="mt-3 text-2xl font-extrabold tracking-tight">{m.value}</div><div className="mt-1 text-[10px] text-slate-500">{m.sub}</div></div>})}
