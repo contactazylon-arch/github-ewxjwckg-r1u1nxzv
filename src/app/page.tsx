@@ -81,17 +81,25 @@ export default function Home() {
   const [catalogBots, setCatalogBots] = useState<DiscoverBot[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogPages, setCatalogPages] = useState(1);
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [catalogError, setCatalogError] = useState(false);
 
   useEffect(() => {
-    if (page !== 'discover' || catalogLoaded || catalogLoading) return;
+    if (page !== 'discover' || catalogLoading) return;
     let active = true;
     setCatalogLoading(true);
-    fetch('/api/catalog/bots?page=1&limit=50&sort=votes_month')
+    const params = new URLSearchParams({ page: String(catalogPage), limit: '50', sort: 'votes_month' });
+    if (submittedQuery.trim()) params.set('search', submittedQuery.trim());
+    fetch('/api/catalog/bots?' + params.toString())
       .then(response => { if (!response.ok) throw new Error('Catalogue indisponible'); return response.json(); })
       .then(data => {
         if (!active) return;
         const rows = Array.isArray(data.bots) ? data.bots : [];
+        setCatalogPages(Number(data.pagination?.pages) || 1);
+        setCatalogTotal(Number(data.pagination?.total) || rows.length);
         setCatalogBots(rows.map((bot: any) => ({
           id: String(bot.id),
           name: String(bot.name || 'Bot Discord'),
@@ -108,16 +116,16 @@ export default function Home() {
       .catch(() => { if (active) setCatalogError(true); })
       .finally(() => { if (active) { setCatalogLoading(false); setCatalogLoaded(true); } });
     return () => { active = false; };
-  }, [page, catalogLoaded, catalogLoading]);
+  }, [page, catalogPage, submittedQuery]);
 
   const [mobileOpen,setMobileOpen] = useState(false);
   const t = copy[lang];
 
   const filteredBots = useMemo(() => catalogBots.filter(bot => {
-    const matchesQuery = `${bot.name} ${bot.description} ${bot.category}`.toLowerCase().includes(query.toLowerCase());
+    const matchesQuery = !submittedQuery || `${bot.name} ${bot.description} ${bot.category}`.toLowerCase().includes(submittedQuery.toLowerCase());
     const matchesCategory = category === 'All' || bot.category.toLowerCase() === category.toLowerCase();
     return matchesQuery && matchesCategory;
-  }),[catalogBots,query,category]);
+  }),[catalogBots,submittedQuery,category]);
 
   const title = t[page === 'overview' ? 'overview' : page];
   const go = (next:Page) => { setPage(next); setMobileOpen(false); };
@@ -188,9 +196,10 @@ export default function Home() {
           </>}
 
           {page==='discover' && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
-            <div className="mb-4 flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={16} className="text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="w-full bg-transparent py-3 text-xs outline-none"/></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border px-3 py-2 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="All">{t.all}</option><option value="Moderation">{t.moderation}</option><option value="Music">{t.music}</option><option value="Games">{t.games}</option><option value="Utilities">{t.utility}</option></select></div>
-            <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({filteredBots.length})</span></div>
+            <div className="mb-4 flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={16} className="text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){setCatalogPage(1);setSubmittedQuery(query);setCatalogLoaded(false);}}} placeholder={t.search} className="w-full bg-transparent py-3 text-xs outline-none"/><button type="button" onClick={()=>{setCatalogPage(1);setSubmittedQuery(query);setCatalogLoaded(false);}} className="rounded-md bg-indigo-500/20 px-3 py-2 text-xs text-indigo-200">Rechercher</button></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border px-3 py-2 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="All">{t.all}</option><option value="Moderation">{t.moderation}</option><option value="Music">{t.music}</option><option value="Games">{t.games}</option><option value="Utilities">{t.utility}</option></select></div>
+            <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({catalogTotal})</span></div>
             {catalogLoading && <p className="py-6 text-center text-xs text-slate-400">Chargement du catalogue réel…</p>}
+            {catalogLoaded && !catalogLoading && catalogBots.length > 0 && <div className="mb-3 text-[10px] text-slate-500">Page {catalogPage} / {catalogPages} · Source : Topbot.gg</div> }
             {catalogError && <p className="py-6 text-center text-xs text-amber-300">Le catalogue est temporairement indisponible. Réessayez dans quelques instants.</p>}
             {!catalogLoading && !catalogError && catalogBots.length === 0 && <p className="py-6 text-center text-xs text-slate-400">Aucun bot disponible pour le moment.</p>}
             
@@ -259,7 +268,7 @@ export default function Home() {
     {t.noResults}
   </p>
 )}
-           <p className="mt-4 text-[10px] text-slate-500">Source : Topbot.gg · Catalogue public actualisé automatiquement.</p>
+           <div className="mt-4 flex items-center justify-between"><p className="text-[10px] text-slate-500">Source : Topbot.gg · Catalogue public actualisé automatiquement.</p><div className="flex gap-2"><button disabled={catalogPage<=1 || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>Math.max(1,p-1))} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Précédent</button><button disabled={catalogPage>=catalogPages || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>p+1)} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Suivant</button></div></div>
           </section>}
 
           {page==='servers' && <Placeholder icon={Server} title={t.connect} text={t.emptyServers}/>}
