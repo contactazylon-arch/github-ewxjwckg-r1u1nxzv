@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, Bell, Bot, ChevronDown, Compass, Database, Gauge, Globe2,
-  LayoutDashboard, Search, Settings, ShieldCheck, Sparkles, Users, Plus,
-  ArrowUpRight, Server, CircleHelp, Menu, X
+  Activity, Bell, Bot, ChevronDown, Compass, Globe2,
+  LayoutDashboard, Search, Settings, Sparkles, Users, Plus,
+  ArrowUpRight, Server, Menu, X
 } from 'lucide-react';
 
 type Lang = 'fr' | 'en';
@@ -62,6 +62,16 @@ const copy = {
 } as const;
 
 type DiscoverBot = { id:string; name:string; category:string; description:string; tag:string; verified:boolean; letter:string; tone:string; inviteUrl:string|null; websiteUrl:string|null; };
+type CatalogApiBot = {
+  id?: unknown;
+  name?: unknown;
+  categories?: unknown;
+  description?: unknown;
+  tags?: unknown;
+  verified?: unknown;
+  inviteUrl?: unknown;
+  websiteUrl?: unknown;
+};
 
 
 const navItems: {id:Page; icon:typeof LayoutDashboard; key:keyof typeof copy.fr}[] = [
@@ -101,7 +111,7 @@ export default function Home() {
         const rows = Array.isArray(data.bots) ? data.bots : [];
         setCatalogPages(Number(data.pagination?.pages) || 1);
         setCatalogTotal(Number(data.pagination?.total) || rows.length);
-        setCatalogBots(rows.map((bot: any) => ({
+        setCatalogBots(rows.map((bot: CatalogApiBot) => ({
           id: String(bot.id),
           name: String(bot.name || 'Bot Discord'),
           category: Array.isArray(bot.categories) && bot.categories.length ? String(bot.categories[0]) : 'Utilities',
