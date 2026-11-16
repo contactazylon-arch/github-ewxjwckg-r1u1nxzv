@@ -50,7 +50,7 @@ export function normalizeTopbotBot(input: unknown): CatalogBot | null {
     serverCount: numberOrNull(bot.serverCount),
     votesTotal: numberOrNull(bot.votesTotal),
     votesMonth: numberOrNull(bot.votesMonth),
-    rating: numberOrNull(bot.rating),
+    rating: numberOrNull(bot.rating) ?? numberOrNull(record(bot.rating).average),
     verified: bot.isVerified === true,
     verificationSource: bot.isVerified === true ? "topbot.gg" : null,
     publishedAt: text(bot.publishedAt),
