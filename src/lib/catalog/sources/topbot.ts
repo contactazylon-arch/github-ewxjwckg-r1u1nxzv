@@ -3,6 +3,13 @@ import type { CatalogBot } from "../types";
 
 const TOPBOT_API = "https://topbot.gg/api/v1/bots";
 
+export class TopbotApiError extends Error {
+  constructor(public readonly status: number) {
+    super(`TOPBOT_HTTP_${status}`);
+    this.name = "TopbotApiError";
+  }
+}
+
 export interface TopbotResult {
   bots: CatalogBot[];
   page: number;
@@ -31,17 +38,24 @@ export async function fetchTopbotBots(options: {
 
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
+    signal: AbortSignal.timeout(10_000),
     next: { revalidate: 300 },
   });
 
   if (!response.ok) {
-    const retryAfter = response.headers.get("retry-after");
-    throw new Error(response.status === 429
-      ? `TOPBOT_RATE_LIMIT:${retryAfter ?? "60"}`
-      : `TOPBOT_HTTP_${response.status}`);
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("retry-after") ?? "60";
+      throw new Error(`TOPBOT_RATE_LIMIT:${retryAfter}`);
+    }
+    throw new TopbotApiError(response.status);
   }
 
-  const payload: unknown = await response.json();
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error("TOPBOT_INVALID_JSON");
+  }
   const root = payload && typeof payload === "object" ? payload as Record<string, unknown> : {};
   const pagination = root.pagination && typeof root.pagination === "object"
     ? root.pagination as Record<string, unknown>
