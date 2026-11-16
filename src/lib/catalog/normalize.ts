@@ -14,7 +14,8 @@ const numberOrNull = (value: unknown): number | null =>
 const localizedText = (value: unknown): string => {
   if (typeof value === "string") return value.trim();
   const item = record(value);
-  return text(item.fr) ?? text(item.en) ?? text(item.default) ?? Object.values(item).find(v => typeof v === "string") as string ?? "";
+  const fallback = Object.values(item).find((value): value is string => typeof value === "string");
+  return text(item.fr) ?? text(item.en) ?? text(item.default) ?? fallback ?? "";
 };
 
 const stringArray = (value: unknown): string[] =>
