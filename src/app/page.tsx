@@ -163,8 +163,73 @@ export default function Home() {
           {page==='discover' && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
             <div className="mb-4 flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={16} className="text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="w-full bg-transparent py-3 text-xs outline-none"/></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border px-3 py-2 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="All">{t.all}</option><option value="Moderation">{t.moderation}</option><option value="Music">{t.music}</option><option value="Games">{t.games}</option><option value="Utilities">{t.utility}</option></select></div>
             <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({filteredBots.length})</span></div>
-            {filteredBots.length?filteredBots.map(bot=><div key={bot.name} className="flex items-center gap-3 border-b border-slate-700/50 py-3 last:border-0"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold" style={{background:bot.tone==='blue'?'#34466d':bot.tone==='purple'?'#49366b':bot.tone==='green'?'#245d58':'#65451e'}}>{bot.letter}</div><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2 text-xs font-semibold">{bot.name}{bot.verified&&<span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] text-emerald-300">{t.verified}</span>}</div><p className="mt-1 text-[11px] text-slate-400">{bot.description}</p></div><span className="hidden text-[10px] text-slate-500 sm:block">{bot.tag}</span></div>):<p className="py-8 text-center text-xs text-slate-400">{t.noResults}</p>}
-            <p className="mt-4 text-[10px] text-slate-500">{t.sample}</p>
+            
+{filteredBots.length ? filteredBots.map(bot => (
+  <div
+    key={bot.name}
+    className="rounded-xl border border-slate-700/50 overflow-hidden mb-2"
+  >
+    <button
+      type="button"
+      onClick={() =>
+        setSelectedDiscoverBot(
+          selectedDiscoverBot === bot.name ? null : bot.name
+        )
+      }
+      aria-expanded={selectedDiscoverBot === bot.name}
+      className="flex w-full items-center gap-3 p-3 text-left hover:bg-white/5 transition"
+    >
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl font-bold"
+        style={{
+          background: bot.tone === 'blue' ? '#34466d' :
+            bot.tone === 'purple' ? '#49366b' :
+            bot.tone === 'green' ? '#245d58' : '#65451e'
+        }}
+      >
+        {bot.letter}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+          {bot.name}
+          {bot.verified && (
+            <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] text-emerald-300">
+              {t.verified}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-[11px] text-slate-400">
+          {bot.description}
+        </p>
+      </div>
+
+      <span className="text-xs text-violet-300">
+        {selectedDiscoverBot === bot.name ? '−' : '+'}
+      </span>
+    </button>
+
+    {selectedDiscoverBot === bot.name && (
+      <div className="border-t border-slate-700/50 p-4">
+        <h3 className="mb-2 text-sm font-semibold">{bot.name}</h3>
+        <p className="text-xs text-slate-400">
+          {bot.description}
+        </p>
+        <div className="mt-3 text-[10px] text-violet-300">
+          {bot.tag} · {bot.category}
+        </div>
+        <div className="mt-3 text-[10px] text-slate-500">
+          Fiche de démonstration BotNexus
+        </div>
+      </div>
+    )}
+  </div>
+)) : (
+  <p className="py-8 text-center text-xs text-slate-400">
+    {t.noResults}
+  </p>
+)}
+           <p className="mt-4 text-[10px] text-slate-500">{t.sample}</p>
           </section>}
 
           {page==='servers' && <Placeholder icon={Server} title={t.connect} text={t.emptyServers}/>}
