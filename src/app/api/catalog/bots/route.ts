@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
       ? "upstream_http_error"
       : message === "TOPBOT_INVALID_JSON"
         ? "upstream_invalid_json"
-        : message === "TimeoutError" || message.includes("timed out")
+        : error instanceof Error && (error.name === "TimeoutError" || /timeout|timed out/i.test(error.message))
           ? "upstream_timeout"
           : "upstream_network_error";
 
