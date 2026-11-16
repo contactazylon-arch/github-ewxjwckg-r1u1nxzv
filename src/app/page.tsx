@@ -90,6 +90,7 @@ export default function Home() {
   useEffect(() => {
     if (page !== 'discover' || catalogLoading) return;
     let active = true;
+    setCatalogError(false);
     setCatalogLoading(true);
     const params = new URLSearchParams({ page: String(catalogPage), limit: '50', sort: 'votes_month' });
     if (submittedQuery.trim()) params.set('search', submittedQuery.trim());
@@ -257,9 +258,11 @@ export default function Home() {
         <div className="mt-3 text-[10px] text-violet-300">
           {bot.tag} · {bot.category}
         </div>
-        <div className="mt-3 text-[10px] text-slate-500">
-          Fiche de démonstration BotNexus
+        <div className="mt-3 flex flex-wrap gap-3 text-xs">
+          {bot.inviteUrl && <a href={bot.inviteUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Inviter le bot ↗</a>}
+          {bot.websiteUrl && <a href={bot.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white">Site officiel ↗</a>}
         </div>
+        {bot.verified && <div className="mt-3 text-[10px] text-emerald-300">Statut vérifié attribué par Topbot.gg</div>}
       </div>
     )}
   </div>
