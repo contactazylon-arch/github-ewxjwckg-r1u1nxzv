@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { deduplicateBots } from "@/lib/catalog/dedupe";
-import { fetchTopbotBots } from "@/lib/catalog/sources/topbot";
+import { fetchTopbotBots, TopbotApiError } from "@/lib/catalog/sources/topbot";
 
 export const runtime = "edge";
 export const revalidate = 300;
@@ -41,8 +41,22 @@ export async function GET(request: NextRequest) {
     const message = error instanceof Error ? error.message : "CATALOG_UNAVAILABLE";
     const rateLimited = message.startsWith("TOPBOT_RATE_LIMIT:");
     const retryAfter = rateLimited ? message.split(":")[1] : null;
+    const upstreamStatus = error instanceof TopbotApiError ? error.status : null;
+    const diagnostic = upstreamStatus !== null
+      ? "upstream_http_error"
+      : message === "TOPBOT_INVALID_JSON"
+        ? "upstream_invalid_json"
+        : message === "TimeoutError" || message.includes("timed out")
+          ? "upstream_timeout"
+          : "upstream_network_error";
+
     return NextResponse.json(
-      { error: rateLimited ? "source_rate_limited" : "catalog_unavailable", source: "topbot.gg" },
+      {
+        error: rateLimited ? "source_rate_limited" : "catalog_unavailable",
+        source: "topbot.gg",
+        diagnostic,
+        ...(upstreamStatus !== null ? { upstreamStatus } : {}),
+      },
       {
         status: rateLimited ? 503 : 502,
         headers: retryAfter ? { "Retry-After": retryAfter } : undefined,
