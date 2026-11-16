@@ -17,11 +17,17 @@ export async function fetchTopbotBots(options: {
   search?: string;
   sort?: string;
 }): Promise<TopbotResult> {
-  const url = new URL(TOPBOT_API);
-  url.searchParams.set("page", String(options.page));
-  url.searchParams.set("limit", String(options.limit));
-  if (options.search) url.searchParams.set("search", options.search.slice(0, 100));
-  if (options.sort) url.searchParams.set("sort", options.sort);
+  const searching = Boolean(options.search?.trim());
+  const url = new URL(searching ? "https://topbot.gg/api/v1/search" : TOPBOT_API);
+  if (searching) {
+    url.searchParams.set("q", options.search!.trim().slice(0, 100));
+    url.searchParams.set("limit", String(Math.min(options.limit, 50)));
+    url.searchParams.set("lang", "en");
+  } else {
+    url.searchParams.set("page", String(options.page));
+    url.searchParams.set("limit", String(options.limit));
+    if (options.sort) url.searchParams.set("sort", options.sort);
+  }
 
   const response = await fetch(url, {
     headers: { Accept: "application/json" },
@@ -41,12 +47,13 @@ export async function fetchTopbotBots(options: {
     ? root.pagination as Record<string, unknown>
     : {};
   const rawBots = Array.isArray(root.data) ? root.data : [];
+  const searchTotal = typeof root.total === "number" ? root.total : rawBots.length;
 
   return {
     bots: rawBots.map(normalizeTopbotBot).filter((bot): bot is CatalogBot => bot !== null),
-    page: typeof pagination.page === "number" ? pagination.page : options.page,
-    limit: typeof pagination.limit === "number" ? pagination.limit : options.limit,
-    total: typeof pagination.total === "number" ? pagination.total : rawBots.length,
+    page: typeof pagination.page === "number" ? pagination.page : 1,
+    limit: typeof pagination.limit === "number" ? pagination.limit : (searching ? Math.min(options.limit, 50) : options.limit),
+    total: typeof pagination.total === "number" ? pagination.total : searchTotal,
     pages: typeof pagination.pages === "number" ? pagination.pages : 1,
   };
 }
