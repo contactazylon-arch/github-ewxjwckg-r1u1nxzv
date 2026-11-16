@@ -21,19 +21,31 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
-      - name: Topbot API connectivity diagnostic
-        continue-on-error: true
+      - name: Topbot API smoke test
         run: |
           node --input-type=module <<'NODE'
           const url = "https://topbot.gg/api/v1/bots?page=1&limit=50&sort=votes_month";
-          try {
-            const response = await fetch(url, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(10000) });
-            const body = await response.text();
-            console.log(`Topbot API HTTP ${response.status}`);
-            console.log(body.slice(0, 1000));
-          } catch (error) {
-            console.error("Topbot API connection failed:", error);
+          const response = await fetch(url, {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(10000),
+          });
+          console.log(`Topbot API HTTP ${response.status}`);
+          if (!response.ok) throw new Error(`Topbot API returned HTTP ${response.status}`);
+          const payload = await response.json();
+          if (!payload || !Array.isArray(payload.data)) {
+            throw new Error("Unexpected Topbot response: data is not an array");
           }
+          const validBots = payload.data.filter(bot =>
+            bot && typeof bot.id === "string" && typeof bot.name === "string"
+          );
+          console.log(`Received ${payload.data.length} records; ${validBots.length} have the required id/name fields.`);
+          if (validBots.length === 0) throw new Error("No valid bot records returned by Topbot");
+          console.log("Sample bot:", JSON.stringify({
+            id: validBots[0].id,
+            name: validBots[0].name,
+            hasDescription: Boolean(validBots[0].shortDescription || validBots[0].description),
+            categories: Array.isArray(validBots[0].categories) ? validBots[0].categories.length : 0,
+          }));
           NODE
       - name: TypeScript validation
         run: npx tsc --noEmit
