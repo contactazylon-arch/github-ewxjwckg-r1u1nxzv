@@ -95,17 +95,30 @@ export default function Home() {
   const [catalogPages, setCatalogPages] = useState(1);
   const [catalogTotal, setCatalogTotal] = useState(0);
   const [submittedQuery, setSubmittedQuery] = useState('');
-  const [catalogError, setCatalogError] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
 
   useEffect(() => {
     if (page !== 'discover' || catalogLoading) return;
     let active = true;
-    setCatalogError(false);
+    setCatalogError(null);
     setCatalogLoading(true);
     const params = new URLSearchParams({ page: String(catalogPage), limit: '50', sort: 'votes_month' });
     if (submittedQuery.trim()) params.set('search', submittedQuery.trim());
     fetch('/api/catalog/bots?' + params.toString())
-      .then(response => { if (!response.ok) throw new Error('Catalogue indisponible'); return response.json(); })
+      .then(async response => {
+        if (!response.ok) {
+          const details = await response.json().catch(() => ({}));
+          const message = details.upstreamStatus
+            ? `Topbot.gg répond HTTP ${details.upstreamStatus}.`
+            : details.diagnostic === 'upstream_timeout'
+              ? 'Topbot.gg ne répond pas dans le délai prévu.'
+              : details.diagnostic === 'upstream_invalid_json'
+                ? 'Topbot.gg a renvoyé une réponse invalide.'
+                : 'Connexion à Topbot.gg impossible.';
+          throw new Error(message);
+        }
+        return response.json();
+      })
       .then(data => {
         if (!active) return;
         const rows = Array.isArray(data.bots) ? data.bots : [];
@@ -124,7 +137,7 @@ export default function Home() {
           websiteUrl: typeof bot.websiteUrl === 'string' ? bot.websiteUrl : null
         })));
       })
-      .catch(() => { if (active) setCatalogError(true); })
+      .catch((error: unknown) => { if (active) setCatalogError(error instanceof Error ? error.message : 'Catalogue indisponible.'); })
       .finally(() => { if (active) { setCatalogLoading(false); setCatalogLoaded(true); } });
     return () => { active = false; };
   }, [page, catalogPage, submittedQuery]);
@@ -211,7 +224,7 @@ export default function Home() {
             <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({catalogTotal})</span></div>
             {catalogLoading && <p className="py-6 text-center text-xs text-slate-400">Chargement du catalogue réel…</p>}
             {catalogLoaded && !catalogLoading && catalogBots.length > 0 && <div className="mb-3 text-[10px] text-slate-500">Page {catalogPage} / {catalogPages} · Source : Topbot.gg</div> }
-            {catalogError && <p className="py-6 text-center text-xs text-amber-300">Le catalogue est temporairement indisponible. Réessayez dans quelques instants.</p>}
+            {catalogError && <p className="py-6 text-center text-xs text-amber-300">{catalogError}</p>}
             {!catalogLoading && !catalogError && catalogBots.length === 0 && <p className="py-6 text-center text-xs text-slate-400">Aucun bot disponible pour le moment.</p>}
             
 {filteredBots.length ? filteredBots.map(bot => (
