@@ -100,18 +100,36 @@ export default function Home() {
   const [translatedDescriptions, setTranslatedDescriptions] = useState<Record<string, string>>({});
   const [translationLoading, setTranslationLoading] = useState<string | null>(null);
   const [translationErrors, setTranslationErrors] = useState<Record<string, string>>({});
-  const [discordUser, setDiscordUser] = useState<{ username: string; globalName: string | null; avatar: string | null } | null>(null);
+  const [discordUser, setDiscordUser] = useState<{ id: string; username: string; globalName: string | null; avatar: string | null } | null>(null);
+  const [discordGuildCount, setDiscordGuildCount] = useState<number | null>(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     fetch('/api/auth/session', { cache: 'no-store' })
-      .then(response => response.ok ? response.json() as Promise<{ authenticated?: boolean; user?: { username: string; globalName: string | null; avatar: string | null } }> : null)
+      .then(response => response.ok ? response.json() as Promise<{ authenticated?: boolean; user?: { id: string; username: string; globalName: string | null; avatar: string | null }; guilds?: unknown[] }> : null)
       .then(data => {
-        if (active && data?.authenticated && data.user) setDiscordUser(data.user);
+        if (!active) return;
+        if (data?.authenticated && data.user) {
+          setDiscordUser(data.user);
+          setDiscordGuildCount(Array.isArray(data.guilds) ? data.guilds.length : null);
+        } else {
+          setDiscordUser(null);
+          setDiscordGuildCount(null);
+        }
       })
-      .catch(() => undefined);
+      .catch(() => { if (active) { setDiscordUser(null); setDiscordGuildCount(null); } })
+      .finally(() => { if (active) setSessionLoading(false); });
     return () => { active = false; };
   }, []);
+
+  const disconnectDiscord = async () => {
+    const response = await fetch('/api/auth/logout', { method: 'POST' });
+    if (response.ok) {
+      setDiscordUser(null);
+      setDiscordGuildCount(null);
+    }
+  };
 
   useEffect(() => {
     let active = true;
@@ -227,13 +245,13 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <button onClick={()=>setLang(lang==='fr'?'en':'fr')} className="rounded-lg border px-3 py-2 text-xs text-slate-300" style={{borderColor:'var(--line)'}}><Globe2 size={14} className="mr-2 inline"/>{lang.toUpperCase()} <ChevronDown size={12} className="ml-1 inline"/></button>
           {discordUser ? (
-            <div className="hidden text-xs text-slate-300 sm:block">{discordUser.globalName || discordUser.username}</div>
+            <button type="button" onClick={() => go('settings')} className="flex max-w-[132px] items-center gap-2 rounded-lg px-1.5 py-1 text-left hover:bg-white/5" aria-label="Voir mon compte Discord">
+              {discordUser.avatar ? <img src={`https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=64`} alt="" className="h-8 w-8 shrink-0 rounded-full" /> : <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-900 text-xs font-bold">{(discordUser.globalName || discordUser.username).charAt(0).toUpperCase()}</div>}
+              <span className="truncate text-[11px] font-medium text-slate-200">{discordUser.globalName || discordUser.username}</span>
+            </button>
           ) : (
-            <a href="/api/auth/discord" className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500">{t.connectDiscord}</a>
+            <a href="/api/auth/discord" className="rounded-lg bg-indigo-600 px-3 py-2 text-[11px] font-semibold text-white transition hover:bg-indigo-500">{sessionLoading ? '…' : t.connectDiscord}</a>
           )}
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-900 text-xs font-bold">
-            {discordUser ? (discordUser.globalName || discordUser.username).charAt(0).toUpperCase() : 'U'}
-          </div>
         </div>
       </header>
 
@@ -259,6 +277,15 @@ export default function Home() {
           </div>
 
           {page==='overview' && <>
+            {discordUser && <section className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border p-4" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
+              {discordUser.avatar ? <img src={`https://cdn.discordapp.com/avatars/${discordUser.id}/${discordUser.avatar}.png?size=96`} alt="" className="h-12 w-12 rounded-full" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full bg-indigo-900 text-lg font-bold">{(discordUser.globalName || discordUser.username).charAt(0).toUpperCase()}</div>}
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-emerald-300">Compte Discord connecté</div>
+                <div className="mt-1 truncate text-sm font-bold text-white">{discordUser.globalName || discordUser.username}</div>
+                <div className="text-[11px] text-slate-400">@{discordUser.username}{discordGuildCount !== null ? ` · ${discordGuildCount} serveur(s) accessible(s)` : ''}</div>
+              </div>
+              <button type="button" onClick={disconnectDiscord} className="rounded-lg border border-slate-600 px-3 py-2 text-[11px] text-slate-300 hover:bg-white/5">Déconnexion</button>
+            </section>}
             <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {[
                 {label:t.serversConnected,value:'04',sub:'↑ 1 ce mois',icon:Users,color:'#8da8ff'},
