@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   Activity, Bell, Bot, ChevronDown, Compass, Globe2,
   LayoutDashboard, Search, Settings, Sparkles, Users, Plus,
-  ArrowUpRight, Server, Menu, X
+  ArrowUpRight, Server, Menu, X, RefreshCw, ShieldCheck, Crown
 } from 'lucide-react';
 
 type Lang = 'fr' | 'en';
 type Page = 'overview' | 'discover' | 'servers' | 'studio' | 'alerts' | 'settings';
+type DiscordGuild = { id: string; name: string; icon: string | null; owner: boolean; permissions: string };
 
 const copy = {
   fr: {
@@ -33,7 +34,8 @@ const copy = {
     sample:'Données de démonstration — aucune donnée Discord réelle n’est connectée.',
     statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité', connectDiscord:'Se connecter avec Discord',
     directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
-    allBots:'Catalogue Topbot.gg', catalogSource:'Catalogue Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.'
+    allBots:'Catalogue Topbot.gg', catalogSource:'Catalogue Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.',
+    serversIntro:'Retrouvez les serveurs associés à votre compte Discord et vos droits sur chacun.', refresh:'Actualiser', loadingServers:'Récupération de vos serveurs Discord…', noServers:'Aucun serveur Discord n’a été retourné pour ce compte.', noManageServers:'Aucun serveur ne vous accorde actuellement les droits de gestion.', manageAccess:'Gestion disponible', limitedAccess:'Accès limité', owner:'Propriétaire', openDiscord:'Ouvrir dans Discord', searchServers:'Rechercher un serveur…', allServers:'Tous', manageableOnly:'Gestion possible', guildError:'Impossible de récupérer vos serveurs Discord. Réessayez dans un instant.'
   },
   en: {
     overview:'Overview', discover:'Discover', servers:'My servers', studio:'Creator studio',
@@ -57,7 +59,8 @@ const copy = {
     sample:'Sample data — no real Discord data is connected.',
     statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user', connectDiscord:'Connect with Discord',
     directoryIntro:'Explore the catalogue and find tools for your communities.',
-    allBots:'Topbot.gg catalogue', catalogSource:'Topbot.gg catalogue', noResults:'No bots match this search.'
+    allBots:'Topbot.gg catalogue', catalogSource:'Topbot.gg catalogue', noResults:'No bots match this search.',
+    serversIntro:'View the servers linked to your Discord account and your permissions for each one.', refresh:'Refresh', loadingServers:'Loading your Discord servers…', noServers:'No Discord servers were returned for this account.', noManageServers:'You do not currently have management permissions on any server.', manageAccess:'Management available', limitedAccess:'Limited access', owner:'Owner', openDiscord:'Open in Discord', searchServers:'Search servers…', allServers:'All', manageableOnly:'Can manage', guildError:'Unable to retrieve your Discord servers. Please try again.'
   }
 } as const;
 
@@ -102,24 +105,34 @@ export default function Home() {
   const [translationErrors, setTranslationErrors] = useState<Record<string, string>>({});
   const [discordUser, setDiscordUser] = useState<{ id: string; username: string; globalName: string | null; avatar: string | null } | null>(null);
   const [discordGuildCount, setDiscordGuildCount] = useState<number | null>(null);
+  const [discordGuilds, setDiscordGuilds] = useState<DiscordGuild[]>([]);
+  const [guildsLoading, setGuildsLoading] = useState(true);
+  const [guildsUnavailable, setGuildsUnavailable] = useState(false);
+  const [guildSearch, setGuildSearch] = useState('');
+  const [manageableOnly, setManageableOnly] = useState(false);
   const [sessionLoading, setSessionLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
     fetch('/api/auth/session', { cache: 'no-store' })
-      .then(response => response.ok ? response.json() as Promise<{ authenticated?: boolean; user?: { id: string; username: string; globalName: string | null; avatar: string | null }; guilds?: unknown[] }> : null)
+      .then(response => response.ok ? response.json() as Promise<{ authenticated?: boolean; user?: { id: string; username: string; globalName: string | null; avatar: string | null }; guilds?: DiscordGuild[]; guildsUnavailable?: boolean }> : null)
       .then(data => {
         if (!active) return;
         if (data?.authenticated && data.user) {
+          const guilds = Array.isArray(data.guilds) ? data.guilds : [];
           setDiscordUser(data.user);
-          setDiscordGuildCount(Array.isArray(data.guilds) ? data.guilds.length : null);
+          setDiscordGuilds(guilds);
+          setDiscordGuildCount(data.guildsUnavailable ? null : guilds.length);
+          setGuildsUnavailable(data.guildsUnavailable === true);
         } else {
           setDiscordUser(null);
+          setDiscordGuilds([]);
           setDiscordGuildCount(null);
+          setGuildsUnavailable(false);
         }
       })
-      .catch(() => { if (active) { setDiscordUser(null); setDiscordGuildCount(null); } })
-      .finally(() => { if (active) setSessionLoading(false); });
+      .catch(() => { if (active) { setDiscordUser(null); setDiscordGuilds([]); setDiscordGuildCount(null); setGuildsUnavailable(true); } })
+      .finally(() => { if (active) { setSessionLoading(false); setGuildsLoading(false); } });
     return () => { active = false; };
   }, []);
 
@@ -128,8 +141,48 @@ export default function Home() {
     if (response.ok) {
       setDiscordUser(null);
       setDiscordGuildCount(null);
+      setDiscordGuilds([]);
+      setGuildsUnavailable(false);
     }
   };
+
+  const refreshDiscordGuilds = async () => {
+    setGuildsLoading(true);
+    setGuildsUnavailable(false);
+    try {
+      const response = await fetch('/api/auth/session', { cache: 'no-store' });
+      if (!response.ok) throw new Error('session_unavailable');
+      const data = await response.json() as { authenticated?: boolean; guilds?: DiscordGuild[]; guildsUnavailable?: boolean };
+      if (!data.authenticated) {
+        setDiscordUser(null);
+        setDiscordGuilds([]);
+        setDiscordGuildCount(null);
+      } else {
+        const guilds = Array.isArray(data.guilds) ? data.guilds : [];
+        setDiscordGuilds(guilds);
+        setDiscordGuildCount(data.guildsUnavailable ? null : guilds.length);
+        setGuildsUnavailable(data.guildsUnavailable === true);
+      }
+    } catch {
+      setGuildsUnavailable(true);
+    } finally {
+      setGuildsLoading(false);
+    }
+  };
+
+  const canManageGuild = (guild: DiscordGuild) => {
+    try {
+      const permissions = BigInt(guild.permissions || '0');
+      return guild.owner || (permissions & 40n) !== 0n;
+    } catch {
+      return guild.owner;
+    }
+  };
+
+  const visibleGuilds = discordGuilds.filter(guild => {
+    const matchesSearch = guild.name.toLowerCase().includes(guildSearch.trim().toLowerCase());
+    return matchesSearch && (!manageableOnly || canManageGuild(guild));
+  });
 
   useEffect(() => {
     let active = true;
@@ -401,7 +454,18 @@ export default function Home() {
            <div className="mt-4 flex items-center justify-between"><p className="text-[10px] text-slate-500">Source : Topbot.gg · Catalogue public actualisé automatiquement.</p><div className="flex gap-2"><button disabled={catalogPage<=1 || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>Math.max(1,p-1))} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Précédent</button><button disabled={catalogPage>=catalogPages || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>p+1)} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Suivant</button></div></div>
           </section>}
 
-          {page==='servers' && <Placeholder icon={Server} title={t.connect} text={t.emptyServers}/>}
+          {page==='servers' && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-sm font-semibold">{t.servers}</h2><p className="mt-1 text-xs text-slate-400">{t.serversIntro}</p></div>{discordUser && <button type="button" onClick={refreshDiscordGuilds} disabled={guildsLoading} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200 hover:bg-white/5 disabled:opacity-50"><RefreshCw size={14} className={guildsLoading?'animate-spin':''}/>{t.refresh}</button>}</div>
+            {!discordUser && !sessionLoading && <div className="flex min-h-[230px] flex-col items-center justify-center text-center"><div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-300"><Server size={25}/></div><h3 className="mb-2 text-sm font-semibold">{t.connect}</h3><p className="mb-5 max-w-md text-xs leading-6 text-slate-400">{t.emptyServers}</p><a href="/api/auth/discord" className="rounded-lg px-4 py-2.5 text-xs font-semibold text-white" style={{background:'linear-gradient(110deg,#526de0,#8059d8)'}}>{t.connectDiscord}</a></div>}
+            {sessionLoading && <p className="py-12 text-center text-xs text-slate-400">{t.loadingServers}</p>}
+            {discordUser && guildsLoading && <p className="py-12 text-center text-xs text-slate-400">{t.loadingServers}</p>}
+            {discordUser && !guildsLoading && guildsUnavailable && <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-4 text-center"><p className="text-xs text-amber-200">{t.guildError}</p><button type="button" onClick={refreshDiscordGuilds} className="mt-3 rounded-lg border border-slate-700 px-3 py-2 text-xs text-slate-200">{t.refresh}</button></div>}
+            {discordUser && !guildsLoading && !guildsUnavailable && <><div className="mb-4 flex flex-col gap-3 sm:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={15} className="text-slate-500"/><input value={guildSearch} onChange={event=>setGuildSearch(event.target.value)} placeholder={t.searchServers} className="w-full bg-transparent py-3 text-xs outline-none"/></div><button type="button" onClick={()=>setManageableOnly(value=>!value)} className={`rounded-lg border px-3 py-2 text-xs ${manageableOnly?'border-indigo-400/50 bg-indigo-500/15 text-indigo-200':'border-slate-700 text-slate-300'}`}>{manageableOnly?t.manageableOnly:t.allServers}</button></div>
+              <div className="mb-3 flex items-center justify-between text-[11px] text-slate-400"><span>{visibleGuilds.length} / {discordGuilds.length} {t.servers.toLowerCase()}</span><span>{discordGuilds.filter(canManageGuild).length} · {t.manageAccess.toLowerCase()}</span></div>
+              {discordGuilds.length===0 && <p className="py-10 text-center text-xs text-slate-400">{t.noServers}</p>}{discordGuilds.length>0 && visibleGuilds.length===0 && <p className="py-10 text-center text-xs text-slate-400">{manageableOnly?t.noManageServers:t.noServers}</p>}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{visibleGuilds.map(guild=>{const manageable=canManageGuild(guild);const iconUrl=guild.icon?`https://cdn.discordapp.com/icons/${guild.id}/${guild.icon}.png?size=96`:null;return <article key={guild.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-slate-700/60 p-3">{iconUrl?<img src={iconUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl"/>:<div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-indigo-500/15 text-sm font-bold text-indigo-200">{guild.name.slice(0,1).toUpperCase()}</div>}<div className="min-w-0 flex-1"><h3 className="truncate text-xs font-semibold text-slate-100">{guild.name}</h3><div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px]">{guild.owner&&<span className="inline-flex items-center gap-1 text-amber-300"><Crown size={11}/>{t.owner}</span>}<span className={`inline-flex items-center gap-1 ${manageable?'text-emerald-300':'text-slate-400'}`}><ShieldCheck size={11}/>{manageable?t.manageAccess:t.limitedAccess}</span></div></div><a href={`https://discord.com/channels/${guild.id}`} target="_blank" rel="noopener noreferrer" aria-label={`${t.openDiscord}: ${guild.name}`} className="shrink-0 rounded-lg border border-slate-700 px-2.5 py-2 text-[10px] text-indigo-200 hover:bg-white/5">↗</a></article>})}</div>
+            </>}
+          </section>}
           {page==='studio' && <Placeholder icon={Bot} title={t.projects} text={t.noProjects}/>}
           {page==='alerts' && <Placeholder icon={Bell} title={t.alerts} text={t.alertsText}/>}
           {page==='settings' && <section className="max-w-xl rounded-xl border p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}><h2 className="mb-4 text-sm font-semibold">{t.account}</h2><label className="mb-2 block text-xs text-slate-400">{t.language}</label><select value={lang} onChange={e=>setLang(e.target.value as Lang)} className="w-full rounded-lg border p-3 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="fr">{t.french}</option><option value="en">{t.english}</option></select></section>}
