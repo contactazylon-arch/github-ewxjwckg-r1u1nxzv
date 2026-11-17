@@ -31,7 +31,7 @@ const copy = {
     alertsText:'Les alertes de disponibilité nécessiteront une intégration de monitoring.',
     account:'Compte et préférences', language:'Langue de l’interface', french:'Français', english:'Anglais',
     sample:'Données de démonstration — aucune donnée Discord réelle n’est connectée.',
-    statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité',
+    statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité', connectDiscord:'Se connecter avec Discord',
     directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
     allBots:'Catalogue Topbot.gg', catalogSource:'Catalogue Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.'
   },
@@ -55,7 +55,7 @@ const copy = {
     alertsText:'Availability alerts will require a monitoring integration.',
     account:'Account and preferences', language:'Interface language', french:'French', english:'English',
     sample:'Sample data — no real Discord data is connected.',
-    statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user',
+    statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user', connectDiscord:'Connect with Discord',
     directoryIntro:'Explore the catalogue and find tools for your communities.',
     allBots:'Topbot.gg catalogue', catalogSource:'Topbot.gg catalogue', noResults:'No bots match this search.'
   }
@@ -100,6 +100,18 @@ export default function Home() {
   const [translatedDescriptions, setTranslatedDescriptions] = useState<Record<string, string>>({});
   const [translationLoading, setTranslationLoading] = useState<string | null>(null);
   const [translationErrors, setTranslationErrors] = useState<Record<string, string>>({});
+  const [discordUser, setDiscordUser] = useState<{ username: string; globalName: string | null; avatar: string | null } | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/auth/session', { cache: 'no-store' })
+      .then(response => response.ok ? response.json() : null)
+      .then(data => {
+        if (active && data?.authenticated && data.user) setDiscordUser(data.user);
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -214,8 +226,14 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-3">
           <button onClick={()=>setLang(lang==='fr'?'en':'fr')} className="rounded-lg border px-3 py-2 text-xs text-slate-300" style={{borderColor:'var(--line)'}}><Globe2 size={14} className="mr-2 inline"/>{lang.toUpperCase()} <ChevronDown size={12} className="ml-1 inline"/></button>
-          <div className="hidden text-xs text-slate-400 sm:block">{t.profile}</div>
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-900 text-xs font-bold">U</div>
+          {discordUser ? (
+            <div className="hidden text-xs text-slate-300 sm:block">{discordUser.globalName || discordUser.username}</div>
+          ) : (
+            <a href="/api/auth/discord" className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-indigo-500">{t.connectDiscord}</a>
+          )}
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-900 text-xs font-bold">
+            {discordUser ? (discordUser.globalName || discordUser.username).charAt(0).toUpperCase() : 'U'}
+          </div>
         </div>
       </header>
 
