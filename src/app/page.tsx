@@ -103,7 +103,7 @@ export default function Home() {
     fetch('/api/catalog/bots?page=1&limit=1&sort=votes_month')
       .then(response => {
         if (!response.ok) throw new Error('Catalogue indisponible');
-        return response.json();
+        return response.json() as Promise<{ pagination?: { total?: number | string } }>;
       })
       .then(data => {
         if (active) setCatalogTotalCount(Number(data.pagination?.total) || 0);
@@ -122,7 +122,7 @@ export default function Home() {
     fetch('/api/catalog/bots?' + params.toString())
       .then(async response => {
         if (!response.ok) {
-          const details = await response.json().catch(() => ({}));
+          const details = await response.json().catch(() => ({})) as { upstreamStatus?: number; diagnostic?: string };
           const message = details.upstreamStatus
             ? `Topbot.gg répond HTTP ${details.upstreamStatus}.`
             : details.diagnostic === 'upstream_timeout'
@@ -132,7 +132,7 @@ export default function Home() {
                 : 'Connexion à Topbot.gg impossible.';
           throw new Error(message);
         }
-        return response.json();
+        return response.json() as Promise<{ bots?: CatalogApiBot[]; pagination?: { pages?: number | string; total?: number | string } }>;
       })
       .then(data => {
         if (!active) return;
