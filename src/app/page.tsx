@@ -97,6 +97,9 @@ export default function Home() {
   const [catalogTotalCount, setCatalogTotalCount] = useState<number | null>(null);
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [translatedDescriptions, setTranslatedDescriptions] = useState<Record<string, string>>({});
+  const [translationLoading, setTranslationLoading] = useState<string | null>(null);
+  const [translationErrors, setTranslationErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let active = true;
@@ -159,6 +162,38 @@ export default function Home() {
 
   const [mobileOpen,setMobileOpen] = useState(false);
   const t = copy[lang];
+
+  useEffect(() => {
+    if (lang !== 'fr' || !selectedDiscoverBot) return;
+    const selectedBot = catalogBots.find(bot => bot.name === selectedDiscoverBot);
+    if (!selectedBot?.description.trim() || translatedDescriptions[selectedBot.id] || translationErrors[selectedBot.id]) return;
+
+    let active = true;
+    setTranslationLoading(selectedBot.id);
+    fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: selectedBot.description }),
+    })
+      .then(async response => {
+        const data = await response.json().catch(() => ({})) as { translatedText?: string; error?: string };
+        if (!response.ok || typeof data.translatedText !== 'string' || !data.translatedText.trim()) {
+          throw new Error(data.error || 'Traduction indisponible');
+        }
+        return data.translatedText;
+      })
+      .then(translatedText => {
+        if (active) setTranslatedDescriptions(previous => ({ ...previous, [selectedBot.id]: translatedText }));
+      })
+      .catch(() => {
+        if (active) setTranslationErrors(previous => ({ ...previous, [selectedBot.id]: 'Traduction indisponible pour le moment.' }));
+      })
+      .finally(() => {
+        if (active) setTranslationLoading(null);
+      });
+
+    return () => { active = false; };
+  }, [lang, selectedDiscoverBot, catalogBots, translatedDescriptions, translationErrors]);
 
   const filteredBots = useMemo(() => catalogBots.filter(bot => {
     const matchesQuery = !submittedQuery || `${bot.name} ${bot.description} ${bot.category}`.toLowerCase().includes(submittedQuery.toLowerCase());
@@ -291,8 +326,17 @@ export default function Home() {
       <div className="border-t border-slate-700/50 p-4">
         <h3 className="mb-2 text-sm font-semibold">{bot.name}</h3>
         <p className="text-xs text-slate-400">
-          {bot.description}
+          {lang === 'fr' ? (translatedDescriptions[bot.id] || bot.description) : bot.description}
         </p>
+        {lang === 'fr' && translationLoading === bot.id && (
+          <p className="mt-2 text-[10px] text-indigo-300">Traduction en cours…</p>
+        )}
+        {lang === 'fr' && translationErrors[bot.id] && (
+          <p className="mt-2 text-[10px] text-amber-300">{translationErrors[bot.id]} Affichage de la description originale.</p>
+        )}
+        {lang === 'fr' && translatedDescriptions[bot.id] && (
+          <p className="mt-2 text-[10px] text-emerald-300">Traduction automatique · Cloudflare AI</p>
+        )}
         <div className="mt-3 text-[10px] text-violet-300">
           {bot.tag} · {bot.category}
         </div>
