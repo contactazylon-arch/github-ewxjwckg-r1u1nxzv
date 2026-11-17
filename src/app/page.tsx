@@ -105,7 +105,7 @@ export default function Home() {
   useEffect(() => {
     let active = true;
     fetch('/api/auth/session', { cache: 'no-store' })
-      .then(response => response.ok ? response.json() : null)
+      .then(response => response.ok ? response.json() as Promise<{ authenticated?: boolean; user?: { username: string; globalName: string | null; avatar: string | null } }> : null)
       .then(data => {
         if (active && data?.authenticated && data.user) setDiscordUser(data.user);
       })
