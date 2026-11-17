@@ -39,6 +39,12 @@ function toBase64Url(bytes: Uint8Array): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new Uint8Array(bytes.byteLength);
+  copy.set(bytes);
+  return copy.buffer;
+}
+
 function fromBase64Url(value: string): Uint8Array {
   const base64 = value.replace(/-/g, "+").replace(/_/g, "/");
   const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
@@ -49,14 +55,14 @@ function fromBase64Url(value: string): Uint8Array {
 async function getEncryptionKey(encoded: string): Promise<CryptoKey> {
   const raw = fromBase64Url(encoded);
   if (raw.byteLength !== 32) throw new Error("BOTNEXUS_SESSION_KEY_INVALID");
-  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+  return crypto.subtle.importKey("raw", toArrayBuffer(raw), "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 
 export async function encryptSession(session: DiscordSession, encodedKey: string): Promise<string> {
   const key = await getEncryptionKey(encodedKey);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify(session));
-  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, plaintext);
+  const ciphertext = await crypto.subtle.encrypt({ name: "AES-GCM", iv: toArrayBuffer(iv) }, key, toArrayBuffer(plaintext));
   return `${toBase64Url(iv)}.${toBase64Url(new Uint8Array(ciphertext))}`;
 }
 
@@ -65,7 +71,7 @@ export async function decryptSession(value: string, encodedKey: string): Promise
     const [ivPart, ciphertextPart] = value.split(".");
     if (!ivPart || !ciphertextPart) return null;
     const key = await getEncryptionKey(encodedKey);
-    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64Url(ivPart) }, key, fromBase64Url(ciphertextPart));
+    const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv: toArrayBuffer(fromBase64Url(ivPart)) }, key, toArrayBuffer(fromBase64Url(ciphertextPart)));
     const parsed: unknown = JSON.parse(new TextDecoder().decode(plaintext));
     if (!parsed || typeof parsed !== "object") return null;
     const session = parsed as DiscordSession;
