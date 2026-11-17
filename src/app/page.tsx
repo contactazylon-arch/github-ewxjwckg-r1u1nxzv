@@ -173,7 +173,7 @@ export default function Home() {
   const canManageGuild = (guild: DiscordGuild) => {
     try {
       const permissions = BigInt(guild.permissions || '0');
-      return guild.owner || (permissions & 40n) !== 0n;
+      return guild.owner || (permissions & BigInt(40)) !== BigInt(0);
     } catch {
       return guild.owner;
     }
