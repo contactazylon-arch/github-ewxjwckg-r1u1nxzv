@@ -1,10 +1,10 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Activity, Bell, Bot, ChevronDown, Compass, Database, Gauge, Globe2,
-  LayoutDashboard, Search, Settings, ShieldCheck, Sparkles, Users, Plus,
-  ArrowUpRight, Server, CircleHelp, Menu, X
+  Activity, Bell, Bot, ChevronDown, Compass, Globe2,
+  LayoutDashboard, Search, Settings, Sparkles, Users, Plus,
+  ArrowUpRight, Server, Menu, X
 } from 'lucide-react';
 
 type Lang = 'fr' | 'en';
@@ -33,7 +33,7 @@ const copy = {
     sample:'Données de démonstration — aucune donnée Discord réelle n’est connectée.',
     statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité',
     directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
-    allBots:'Catalogue de démonstration', noResults:'Aucun bot ne correspond à cette recherche.'
+    allBots:'Catalogue Topbot.gg', catalogSource:'Catalogue Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.'
   },
   en: {
     overview:'Overview', discover:'Discover', servers:'My servers', studio:'Creator studio',
@@ -57,17 +57,22 @@ const copy = {
     sample:'Sample data — no real Discord data is connected.',
     statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user',
     directoryIntro:'Explore the catalogue and find tools for your communities.',
-    allBots:'Demo catalogue', noResults:'No bots match this search.'
+    allBots:'Topbot.gg catalogue', catalogSource:'Topbot.gg catalogue', noResults:'No bots match this search.'
   }
 } as const;
 
-const demoBots = [
-  {name:'MEE6',category:'Moderation',description:'Outils de modération et de gestion communautaire.',tag:'Multi-fonctions',verified:true,letter:'M',tone:'blue'},
-  {name:'Carl-bot',category:'Utilities',description:'Automatisation, rôles et messages personnalisés.',tag:'Automatisation',verified:true,letter:'C',tone:'purple'},
-  {name:'Sapphire',category:'Moderation',description:'Gestion et modération de communautés Discord.',tag:'Modération',verified:false,letter:'S',tone:'green'},
-  {name:'Hydra',category:'Music',description:'Bot musical et outils communautaires.',tag:'Musique',verified:false,letter:'H',tone:'amber'},
-  {name:'Dank Memer',category:'Games',description:'Économie virtuelle et mini-jeux communautaires.',tag:'Économie & jeux',verified:false,letter:'D',tone:'pink'},
-];
+type DiscoverBot = { id:string; name:string; category:string; description:string; tag:string; verified:boolean; letter:string; tone:string; inviteUrl:string|null; websiteUrl:string|null; };
+type CatalogApiBot = {
+  id?: unknown;
+  name?: unknown;
+  categories?: unknown;
+  description?: unknown;
+  tags?: unknown;
+  verified?: unknown;
+  inviteUrl?: unknown;
+  websiteUrl?: unknown;
+};
+
 
 const navItems: {id:Page; icon:typeof LayoutDashboard; key:keyof typeof copy.fr}[] = [
   {id:'overview',icon:LayoutDashboard,key:'overview'},
@@ -83,14 +88,118 @@ export default function Home() {
   const [query,setQuery] = useState('');
   const [category,setCategory] = useState('All');
   const [selectedDiscoverBot,setSelectedDiscoverBot] = useState<string | null>(null);
+  const [catalogBots, setCatalogBots] = useState<DiscoverBot[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogLoaded, setCatalogLoaded] = useState(false);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogPages, setCatalogPages] = useState(1);
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [catalogTotalCount, setCatalogTotalCount] = useState<number | null>(null);
+  const [submittedQuery, setSubmittedQuery] = useState('');
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [translatedDescriptions, setTranslatedDescriptions] = useState<Record<string, string>>({});
+  const [translationLoading, setTranslationLoading] = useState<string | null>(null);
+  const [translationErrors, setTranslationErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let active = true;
+    fetch('/api/catalog/bots?page=1&limit=1&sort=votes_month')
+      .then(response => {
+        if (!response.ok) throw new Error('Catalogue indisponible');
+        return response.json() as Promise<{ pagination?: { total?: number | string } }>;
+      })
+      .then(data => {
+        if (active) setCatalogTotalCount(Number(data.pagination?.total) || 0);
+      })
+      .catch(() => { if (active) setCatalogTotalCount(null); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (page !== 'discover' || catalogLoading) return;
+    let active = true;
+    setCatalogError(null);
+    setCatalogLoading(true);
+    const params = new URLSearchParams({ page: String(catalogPage), limit: '50', sort: 'votes_month' });
+    if (submittedQuery.trim()) params.set('search', submittedQuery.trim());
+    fetch('/api/catalog/bots?' + params.toString())
+      .then(async response => {
+        if (!response.ok) {
+          const details = await response.json().catch(() => ({})) as { upstreamStatus?: number; diagnostic?: string };
+          const message = details.upstreamStatus
+            ? `Topbot.gg répond HTTP ${details.upstreamStatus}.`
+            : details.diagnostic === 'upstream_timeout'
+              ? 'Topbot.gg ne répond pas dans le délai prévu.'
+              : details.diagnostic === 'upstream_invalid_json'
+                ? 'Topbot.gg a renvoyé une réponse invalide.'
+                : 'Connexion à Topbot.gg impossible.';
+          throw new Error(message);
+        }
+        return response.json() as Promise<{ bots?: CatalogApiBot[]; pagination?: { pages?: number | string; total?: number | string } }>;
+      })
+      .then(data => {
+        if (!active) return;
+        const rows = Array.isArray(data.bots) ? data.bots : [];
+        setCatalogPages(Number(data.pagination?.pages) || 1);
+        setCatalogTotal(Number(data.pagination?.total) || rows.length);
+        setCatalogBots(rows.map((bot: CatalogApiBot) => ({
+          id: String(bot.id),
+          name: String(bot.name || 'Bot Discord'),
+          category: Array.isArray(bot.categories) && bot.categories.length ? String(bot.categories[0]) : 'Utilities',
+          description: String(bot.description || ''),
+          tag: Array.isArray(bot.tags) && bot.tags.length ? String(bot.tags[0]) : 'Discord bot',
+          verified: bot.verified === true,
+          letter: String(bot.name || 'B').charAt(0).toUpperCase(),
+          tone: 'blue',
+          inviteUrl: typeof bot.inviteUrl === 'string' ? bot.inviteUrl : null,
+          websiteUrl: typeof bot.websiteUrl === 'string' ? bot.websiteUrl : null
+        })));
+      })
+      .catch((error: unknown) => { if (active) setCatalogError(error instanceof Error ? error.message : 'Catalogue indisponible.'); })
+      .finally(() => { if (active) { setCatalogLoading(false); setCatalogLoaded(true); } });
+    return () => { active = false; };
+  }, [page, catalogPage, submittedQuery]);
+
   const [mobileOpen,setMobileOpen] = useState(false);
   const t = copy[lang];
 
-  const filteredBots = useMemo(() => demoBots.filter(bot => {
-    const matchesQuery = `${bot.name} ${bot.description} ${bot.category}`.toLowerCase().includes(query.toLowerCase());
-    const matchesCategory = category === 'All' || bot.category === category;
+  useEffect(() => {
+    if (lang !== 'fr' || !selectedDiscoverBot) return;
+    const selectedBot = catalogBots.find(bot => bot.name === selectedDiscoverBot);
+    if (!selectedBot?.description.trim() || translatedDescriptions[selectedBot.id] || translationErrors[selectedBot.id]) return;
+
+    let active = true;
+    setTranslationLoading(selectedBot.id);
+    fetch('/api/translate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: selectedBot.description }),
+    })
+      .then(async response => {
+        const data = await response.json().catch(() => ({})) as { translatedText?: string; error?: string };
+        if (!response.ok || typeof data.translatedText !== 'string' || !data.translatedText.trim()) {
+          throw new Error(data.error || 'Traduction indisponible');
+        }
+        return data.translatedText;
+      })
+      .then(translatedText => {
+        if (active) setTranslatedDescriptions(previous => ({ ...previous, [selectedBot.id]: translatedText }));
+      })
+      .catch(() => {
+        if (active) setTranslationErrors(previous => ({ ...previous, [selectedBot.id]: 'Traduction indisponible pour le moment.' }));
+      })
+      .finally(() => {
+        if (active) setTranslationLoading(null);
+      });
+
+    return () => { active = false; };
+  }, [lang, selectedDiscoverBot, catalogBots, translatedDescriptions, translationErrors]);
+
+  const filteredBots = useMemo(() => catalogBots.filter(bot => {
+    const matchesQuery = !submittedQuery || `${bot.name} ${bot.description} ${bot.category}`.toLowerCase().includes(submittedQuery.toLowerCase());
+    const matchesCategory = category === 'All' || bot.category.toLowerCase() === category.toLowerCase();
     return matchesQuery && matchesCategory;
-  }),[query,category]);
+  }),[catalogBots,submittedQuery,category]);
 
   const title = t[page === 'overview' ? 'overview' : page];
   const go = (next:Page) => { setPage(next); setMobileOpen(false); };
@@ -135,7 +244,7 @@ export default function Home() {
             <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
               {[
                 {label:t.serversConnected,value:'04',sub:'↑ 1 ce mois',icon:Users,color:'#8da8ff'},
-                {label:t.listedBots,value:'2 458',sub:'Catalogue public',icon:Bot,color:'#b69bff'},
+                {label:t.listedBots,value:catalogTotalCount === null ? '…' : catalogTotalCount.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US'),sub:t.catalogSource,icon:Bot,color:'#b69bff'},
                 {label:t.monitored,value:'12',sub:'11 opérationnels',icon:Activity,color:'#64dcb2'},
                 {label:t.openAlerts,value:'01',sub:'À vérifier',icon:Bell,color:'#f3c477'},
               ].map((m,i)=>{const Icon=m.icon;return <div className="rounded-xl border p-4" style={{background:'var(--panel)',borderColor:'var(--line)'}} key={i}><div className="flex items-center justify-between text-[11px] text-slate-400">{m.label}<Icon size={16} style={{color:m.color}}/></div><div className="mt-3 text-2xl font-extrabold tracking-tight">{m.value}</div><div className="mt-1 text-[10px] text-slate-500">{m.sub}</div></div>})}
@@ -161,8 +270,12 @@ export default function Home() {
           </>}
 
           {page==='discover' && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
-            <div className="mb-4 flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={16} className="text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} placeholder={t.search} className="w-full bg-transparent py-3 text-xs outline-none"/></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border px-3 py-2 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="All">{t.all}</option><option value="Moderation">{t.moderation}</option><option value="Music">{t.music}</option><option value="Games">{t.games}</option><option value="Utilities">{t.utility}</option></select></div>
-            <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({filteredBots.length})</span></div>
+            <div className="mb-4 flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={16} className="text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){setCatalogPage(1);setSubmittedQuery(query);setCatalogLoaded(false);}}} placeholder={t.search} className="w-full bg-transparent py-3 text-xs outline-none"/><button type="button" onClick={()=>{setCatalogPage(1);setSubmittedQuery(query);setCatalogLoaded(false);}} className="rounded-md bg-indigo-500/20 px-3 py-2 text-xs text-indigo-200">Rechercher</button></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border px-3 py-2 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="All">{t.all}</option><option value="Moderation">{t.moderation}</option><option value="Music">{t.music}</option><option value="Games">{t.games}</option><option value="Utilities">{t.utility}</option></select></div>
+            <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({catalogTotal})</span></div>
+            {catalogLoading && <p className="py-6 text-center text-xs text-slate-400">Chargement du catalogue réel…</p>}
+            {catalogLoaded && !catalogLoading && catalogBots.length > 0 && <div className="mb-3 text-[10px] text-slate-500">Page {catalogPage} / {catalogPages} · Source : Topbot.gg</div> }
+            {catalogError && <p className="py-6 text-center text-xs text-amber-300">{catalogError}</p>}
+            {!catalogLoading && !catalogError && catalogBots.length === 0 && <p className="py-6 text-center text-xs text-slate-400">Aucun bot disponible pour le moment.</p>}
             
 {filteredBots.length ? filteredBots.map(bot => (
   <div
@@ -213,14 +326,25 @@ export default function Home() {
       <div className="border-t border-slate-700/50 p-4">
         <h3 className="mb-2 text-sm font-semibold">{bot.name}</h3>
         <p className="text-xs text-slate-400">
-          {bot.description}
+          {lang === 'fr' ? (translatedDescriptions[bot.id] || bot.description) : bot.description}
         </p>
+        {lang === 'fr' && translationLoading === bot.id && (
+          <p className="mt-2 text-[10px] text-indigo-300">Traduction en cours…</p>
+        )}
+        {lang === 'fr' && translationErrors[bot.id] && (
+          <p className="mt-2 text-[10px] text-amber-300">{translationErrors[bot.id]} Affichage de la description originale.</p>
+        )}
+        {lang === 'fr' && translatedDescriptions[bot.id] && (
+          <p className="mt-2 text-[10px] text-emerald-300">Traduction automatique · Cloudflare AI</p>
+        )}
         <div className="mt-3 text-[10px] text-violet-300">
           {bot.tag} · {bot.category}
         </div>
-        <div className="mt-3 text-[10px] text-slate-500">
-          Fiche de démonstration BotNexus
+        <div className="mt-3 flex flex-wrap gap-3 text-xs">
+          {bot.inviteUrl && <a href={bot.inviteUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Inviter le bot ↗</a>}
+          {bot.websiteUrl && <a href={bot.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white">Site officiel ↗</a>}
         </div>
+        {bot.verified && <div className="mt-3 text-[10px] text-emerald-300">Statut vérifié attribué par Topbot.gg</div>}
       </div>
     )}
   </div>
@@ -229,7 +353,7 @@ export default function Home() {
     {t.noResults}
   </p>
 )}
-           <p className="mt-4 text-[10px] text-slate-500">{t.sample}</p>
+           <div className="mt-4 flex items-center justify-between"><p className="text-[10px] text-slate-500">Source : Topbot.gg · Catalogue public actualisé automatiquement.</p><div className="flex gap-2"><button disabled={catalogPage<=1 || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>Math.max(1,p-1))} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Précédent</button><button disabled={catalogPage>=catalogPages || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>p+1)} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Suivant</button></div></div>
           </section>}
 
           {page==='servers' && <Placeholder icon={Server} title={t.connect} text={t.emptyServers}/>}
