@@ -60,3 +60,22 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Translation API smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/translate";
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ text: "This Discord bot helps you manage your server." }),
+            signal: AbortSignal.timeout(30000),
+          });
+          const payload = await response.json().catch(() => null);
+          console.log(`Translation API HTTP ${response.status}`);
+          console.log("Translation API response:", JSON.stringify(payload));
+          if (!response.ok) throw new Error(`Translation API returned HTTP ${response.status}`);
+          if (!payload || typeof payload.translatedText !== "string" || !payload.translatedText.trim()) {
+            throw new Error("Translation API did not return translatedText");
+          }
+          console.log("Translation API smoke test passed.");
+          NODE
