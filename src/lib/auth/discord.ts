@@ -5,6 +5,7 @@ type DiscordBindings = {
   DISCORD_CLIENT_SECRET?: string;
   DISCORD_REDIRECT_URI?: string;
   BOTNEXUS_SESSION_KEY?: string;
+  BOTNEXUS_ADMIN_IDS?: string;
 };
 
 export type DiscordSession = {
@@ -23,6 +24,15 @@ export type DiscordSession = {
 const SESSION_COOKIE = "botnexus_session";
 const STATE_COOKIE = "botnexus_oauth_state";
 const SESSION_MAX_AGE = 60 * 60 * 24 * 7;
+
+export function isDiscordAdmin(userId: string): boolean {
+  const bindings = env as unknown as DiscordBindings;
+  const adminIds = (bindings.BOTNEXUS_ADMIN_IDS ?? "")
+    .split(",")
+    .map(id => id.trim())
+    .filter(Boolean);
+  return adminIds.includes(userId);
+}
 
 export function getDiscordConfig() {
   const bindings = env as unknown as DiscordBindings;
