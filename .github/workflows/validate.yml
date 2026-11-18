@@ -101,22 +101,48 @@ jobs:
           if (typeof payload.monitoring.availableServices !== "number") throw new Error("Monitoring checks are missing");
           console.log("Dashboard stats and monitoring smoke test passed.");
           NODE
-      - name: Activity tracking authentication smoke test
+      - name: Public visit tracking smoke test
         run: |
           node --input-type=module <<'NODE'
           const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/activity";
           const response = await fetch(endpoint, {
             method: "POST",
             headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify({ event: "page_overview" }),
+            body: JSON.stringify({ type: "visit", page: "overview" }),
             signal: AbortSignal.timeout(15000),
           });
           const payload = await response.json().catch(() => null);
-          console.log(`Activity API unauthenticated HTTP ${response.status}`);
-          if (response.status !== 401 || payload?.reason !== "authentication_required") {
-            throw new Error("Activity endpoint must reject unauthenticated events");
+          console.log(`Public visit tracking HTTP ${response.status}`);
+          if (!response.ok || payload?.recorded !== true || payload?.type !== "visit") {
+            throw new Error("Public visit event was not recorded");
           }
-          console.log("Activity tracking authentication smoke test passed.");
+          NODE
+      - name: Activity interaction authentication smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/activity";
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ type: "interaction", event: "page_overview" }),
+            signal: AbortSignal.timeout(15000),
+          });
+          const payload = await response.json().catch(() => null);
+          console.log(`Unauthenticated interaction HTTP ${response.status}`);
+          if (response.status !== 401 || payload?.reason !== "authentication_required") {
+            throw new Error("Authenticated interactions must reject anonymous requests");
+          }
+          NODE
+      - name: Admin analytics access control smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/admin/analytics";
+          const response = await fetch(endpoint, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+          const payload = await response.json().catch(() => null);
+          console.log(`Unauthenticated admin analytics HTTP ${response.status}`);
+          if (response.status !== 401 || payload?.error !== "authentication_required") {
+            throw new Error("Admin analytics must reject unauthenticated requests");
+          }
           NODE
       - name: Translation API smoke test
         run: |
