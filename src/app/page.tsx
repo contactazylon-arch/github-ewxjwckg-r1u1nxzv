@@ -34,7 +34,7 @@ const copy = {
     sample:'Données de démonstration — aucune donnée Discord réelle n’est connectée.',
     statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité', connectDiscord:'Se connecter avec Discord',
     directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
-    allBots:'Catalogue multi-source', catalogSource:'Total Topbot.gg', pageSources:'Topbot.gg : {topbot} · Discord : {discord} bots affichés',, noResults:'Aucun bot ne correspond à cette recherche.',
+    allBots:'Catalogue multi-source', catalogSource:'Total Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.',
     serversIntro:'Retrouvez les serveurs associés à votre compte Discord et vos droits sur chacun.', refresh:'Actualiser', loadingServers:'Récupération de vos serveurs Discord…', noServers:'Aucun serveur Discord n’a été retourné pour ce compte.', noManageServers:'Aucun serveur ne vous accorde actuellement les droits de gestion.', manageAccess:'Gestion disponible', limitedAccess:'Accès limité', owner:'Propriétaire', searchServers:'Rechercher un serveur…', allServers:'Tous', manageableOnly:'Gestion possible', guildError:'Impossible de récupérer vos serveurs Discord. Réessayez dans un instant.', backToServers:'Retour à mes serveurs', serverId:'Identifiant du serveur', serverAccess:'Vos droits sur ce serveur', serverManageInfo:'Vous disposez des droits nécessaires pour accéder aux futures fonctions de gestion BotNexus.', serverLimitedInfo:'Vous pouvez consulter les informations du serveur, mais votre compte ne dispose pas des droits de gestion nécessaires.', openDiscord:'Ouvrir dans Discord', viewServer:'Consulter le serveur'
   },
   en: {
@@ -59,7 +59,7 @@ const copy = {
     sample:'Sample data — no real Discord data is connected.',
     statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user', connectDiscord:'Connect with Discord',
     directoryIntro:'Explore the catalogue and find tools for your communities.',
-    allBots:'Multi-source catalogue', catalogSource:'Topbot.gg total', pageSources:'Topbot.gg: {topbot} · Discord: {discord} bots displayed',, noResults:'No bots match this search.',
+    allBots:'Multi-source catalogue', catalogSource:'Topbot.gg total', noResults:'No bots match this search.',
     serversIntro:'View the servers linked to your Discord account and your permissions for each one.', refresh:'Refresh', loadingServers:'Loading your Discord servers…', noServers:'No Discord servers were returned for this account.', noManageServers:'You do not currently have management permissions on any server.', manageAccess:'Management available', limitedAccess:'Limited access', owner:'Owner', searchServers:'Search servers…', allServers:'All', manageableOnly:'Can manage', guildError:'Unable to retrieve your Discord servers. Please try again.', backToServers:'Back to my servers', serverId:'Server ID', serverAccess:'Your access to this server', serverManageInfo:'You have the permissions required to access future BotNexus management features.', serverLimitedInfo:'You can view this server information, but your account does not have management permissions.', openDiscord:'Open in Discord', viewServer:'View server'
   }
 } as const;
