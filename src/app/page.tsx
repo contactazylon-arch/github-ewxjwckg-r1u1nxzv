@@ -404,6 +404,24 @@ export default function Home() {
     for (const [pageName, count] of Object.entries(day.pages)) totals[pageName] = (totals[pageName] ?? 0) + count;
     return totals;
   }, {});
+  // Translate technical page identifiers only for display; stored analytics keys remain unchanged.
+  const analyticsPageLabels: Record<string, string> = lang === 'fr'
+    ? {
+        overview: 'Vue d’ensemble',
+        discover: 'Découverte',
+        settings: 'Paramètres',
+        servers: 'Serveurs',
+        studio: 'Studio créateur',
+        alerts: 'Notifications',
+      }
+    : {
+        overview: 'Overview',
+        discover: 'Discover',
+        settings: 'Settings',
+        servers: 'Servers',
+        studio: 'Creator studio',
+        alerts: 'Notifications',
+      };
   const go = (next:Page) => { setPage(next); setMobileOpen(false); };
 
   return (
@@ -478,7 +496,7 @@ export default function Home() {
                   </div>
                   <div className="flex h-32 items-end gap-1 px-1">{analyticsDays.map(day=>{const max=Math.max(1,...analyticsDays.map(item=>Math.max(item.visits,item.interactions)));return <div key={day.date} className="flex h-full min-w-0 flex-1 items-end justify-center gap-px"><div className="w-1/2 rounded-t-sm" style={{height:`${Math.max(2,day.visits/max*100)}%`,background:'#9278f4'}} title={`${day.date}: ${day.visits} visites`}/><div className="w-1/2 rounded-t-sm" style={{height:`${Math.max(2,day.interactions/max*100)}%`,background:'#36cfa7'}} title={`${day.date}: ${day.interactions} interactions`}/></div>})}</div>
                   <div className="mt-2 flex justify-between text-[10px] text-slate-500">{analyticsDays.filter((_,index)=>analyticsRange===7 || index%5===0 || index===analyticsDays.length-1).map(day=><span key={day.date}>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US',{day:'2-digit',month:'short',timeZone:'UTC'})}</span>)}</div>
-                  <div className="mt-5 border-t pt-4" style={{borderColor:'var(--line)'}}><h3 className="mb-3 text-xs font-semibold">{lang === 'fr' ? 'Pages les plus consultées' : 'Most viewed pages'}</h3><div className="space-y-2">{Object.entries(analyticsPageTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([pageName,count])=><div key={pageName} className="flex items-center justify-between gap-3 text-[11px]"><span className="text-slate-300">{pageName}</span><span className="font-semibold tabular-nums text-violet-200">{count.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</span></div>)}{Object.keys(analyticsPageTotals).length===0 && <p className="text-[11px] text-slate-500">{lang === 'fr' ? 'Aucune page consultée sur cette période.' : 'No page views in this period.'}</p>}</div></div>
+                  <div className="mt-5 border-t pt-4" style={{borderColor:'var(--line)'}}><h3 className="mb-3 text-xs font-semibold">{lang === 'fr' ? 'Pages les plus consultées' : 'Most viewed pages'}</h3><div className="space-y-2">{Object.entries(analyticsPageTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([pageName,count])=><div key={pageName} className="flex items-center justify-between gap-3 text-[11px]"><span className="text-slate-300">{analyticsPageLabels[pageName] ?? pageName}</span><span className="font-semibold tabular-nums text-violet-200">{count.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</span></div>)}{Object.keys(analyticsPageTotals).length===0 && <p className="text-[11px] text-slate-500">{lang === 'fr' ? 'Aucune page consultée sur cette période.' : 'No page views in this period.'}</p>}</div></div>
                   <p className="mt-4 text-[10px] text-slate-500">{lang === 'fr' ? `Pages vues publiques et interactions authentifiées · conservation ${adminAnalytics.retentionDays} jours · les visites ne représentent pas des visiteurs uniques` : `Public page views and authenticated interactions · ${adminAnalytics.retentionDays}-day retention · visits are not unique visitors`}</p>
                 </>}
                 {!adminAnalyticsLoading && !adminAnalytics && <div className="py-8 text-center text-xs text-amber-300">{lang === 'fr' ? 'Statistiques administrateur indisponibles. Vérifiez la configuration des administrateurs.' : 'Admin analytics unavailable. Check administrator configuration.'}</div>}
