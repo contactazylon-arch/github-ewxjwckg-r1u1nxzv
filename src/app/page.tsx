@@ -16,7 +16,7 @@ const copy = {
     overview:'Vue d’ensemble', discover:'Découverte', servers:'Mes serveurs', studio:'Studio créateur',
     alerts:'Notifications', settings:'Paramètres', personal:'ESPACE PERSONNEL',
     subtitle:'Retrouvez votre écosystème Discord en un seul endroit.',
-    add:'Ajouter un bot', serversConnected:'Serveurs connectés', listedBots:'Bots référencés',
+    add:'Ajouter un bot', serversConnected:'Serveurs connectés', listedBots:'Bots Topbot.gg',
     monitored:'Bots surveillés', openAlerts:'Alertes ouvertes', activity:'Activité de la plateforme',
     week:'7 derniers jours', system:'État des services', api:'API BotNexus', database:'Base de données',
     monitoring:'Monitoring', demo:'Démonstration', recent:'Bots récemment consultés',
@@ -34,14 +34,14 @@ const copy = {
     sample:'Données de démonstration — aucune donnée Discord réelle n’est connectée.',
     statusOnline:'Opérationnel', statusDemo:'Démo', profile:'Utilisateur invité', connectDiscord:'Se connecter avec Discord',
     directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
-    allBots:'Catalogue Topbot.gg', catalogSource:'Catalogue Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.',
+    allBots:'Catalogue multi-source', catalogSource:'Total Topbot.gg', pageSources:'Topbot.gg : {topbot} · Discord : {discord} bots affichés',, noResults:'Aucun bot ne correspond à cette recherche.',
     serversIntro:'Retrouvez les serveurs associés à votre compte Discord et vos droits sur chacun.', refresh:'Actualiser', loadingServers:'Récupération de vos serveurs Discord…', noServers:'Aucun serveur Discord n’a été retourné pour ce compte.', noManageServers:'Aucun serveur ne vous accorde actuellement les droits de gestion.', manageAccess:'Gestion disponible', limitedAccess:'Accès limité', owner:'Propriétaire', searchServers:'Rechercher un serveur…', allServers:'Tous', manageableOnly:'Gestion possible', guildError:'Impossible de récupérer vos serveurs Discord. Réessayez dans un instant.', backToServers:'Retour à mes serveurs', serverId:'Identifiant du serveur', serverAccess:'Vos droits sur ce serveur', serverManageInfo:'Vous disposez des droits nécessaires pour accéder aux futures fonctions de gestion BotNexus.', serverLimitedInfo:'Vous pouvez consulter les informations du serveur, mais votre compte ne dispose pas des droits de gestion nécessaires.', openDiscord:'Ouvrir dans Discord', viewServer:'Consulter le serveur'
   },
   en: {
     overview:'Overview', discover:'Discover', servers:'My servers', studio:'Creator studio',
     alerts:'Notifications', settings:'Settings', personal:'PERSONAL SPACE',
     subtitle:'Your Discord ecosystem, all in one place.',
-    add:'Add a bot', serversConnected:'Connected servers', listedBots:'Listed bots',
+    add:'Add a bot', serversConnected:'Connected servers', listedBots:'Topbot.gg bots',
     monitored:'Monitored bots', openAlerts:'Open alerts', activity:'Platform activity',
     week:'Last 7 days', system:'Service status', api:'BotNexus API', database:'Database',
     monitoring:'Monitoring', demo:'Demo', recent:'Recently viewed bots',
@@ -59,12 +59,12 @@ const copy = {
     sample:'Sample data — no real Discord data is connected.',
     statusOnline:'Operational', statusDemo:'Demo', profile:'Guest user', connectDiscord:'Connect with Discord',
     directoryIntro:'Explore the catalogue and find tools for your communities.',
-    allBots:'Topbot.gg catalogue', catalogSource:'Topbot.gg catalogue', noResults:'No bots match this search.',
+    allBots:'Multi-source catalogue', catalogSource:'Topbot.gg total', pageSources:'Topbot.gg: {topbot} · Discord: {discord} bots displayed',, noResults:'No bots match this search.',
     serversIntro:'View the servers linked to your Discord account and your permissions for each one.', refresh:'Refresh', loadingServers:'Loading your Discord servers…', noServers:'No Discord servers were returned for this account.', noManageServers:'You do not currently have management permissions on any server.', manageAccess:'Management available', limitedAccess:'Limited access', owner:'Owner', searchServers:'Search servers…', allServers:'All', manageableOnly:'Can manage', guildError:'Unable to retrieve your Discord servers. Please try again.', backToServers:'Back to my servers', serverId:'Server ID', serverAccess:'Your access to this server', serverManageInfo:'You have the permissions required to access future BotNexus management features.', serverLimitedInfo:'You can view this server information, but your account does not have management permissions.', openDiscord:'Open in Discord', viewServer:'View server'
   }
 } as const;
 
-type DiscoverBot = { id:string; name:string; category:string; description:string; tag:string; verified:boolean; letter:string; tone:string; inviteUrl:string|null; websiteUrl:string|null; iconUrl:string|null; source:'Topbot.gg'|'Discord'; };
+type DiscoverBot = { id:string; name:string; category:string; description:string; tag:string; verified:boolean; letter:string; tone:string; inviteUrl:string|null; websiteUrl:string|null; iconUrl:string|null; source:'Topbot.gg'|'Discord'; sources:string[]; };
 type CatalogApiBot = {
   id?: unknown;
   name?: unknown;
@@ -98,6 +98,7 @@ export default function Home() {
   const [catalogPage, setCatalogPage] = useState(1);
   const [catalogPages, setCatalogPages] = useState(1);
   const [catalogTotal, setCatalogTotal] = useState(0);
+  const [catalogSourceCounts, setCatalogSourceCounts] = useState({ topbot: 0, discord: 0 });
   const [catalogTotalCount, setCatalogTotalCount] = useState<number | null>(null);
   const [submittedQuery, setSubmittedQuery] = useState('');
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -228,6 +229,7 @@ export default function Home() {
       websiteUrl: typeof bot.websiteUrl === 'string' ? bot.websiteUrl : null,
       iconUrl: typeof bot.iconUrl === 'string' ? bot.iconUrl : null,
       source,
+      sources: [source],
     });
 
     Promise.allSettled([
@@ -272,10 +274,12 @@ export default function Home() {
             websiteUrl: existing.websiteUrl || bot.websiteUrl,
             verified: existing.verified || bot.verified,
             tag: existing.tag || bot.tag,
+            sources: [...new Set([...existing.sources, ...bot.sources])],
           });
         }
       }
       const rows = Array.from(unique.values());
+      setCatalogSourceCounts({ topbot: topbotRows.length, discord: discordRows.length });
       setCatalogBots(rows);
       setCatalogPages(Math.max(1, Number(topbot?.pagination?.pages) || 1, Number(discord?.pagination?.pages) || 1));
       setCatalogTotal(rows.length);
@@ -420,15 +424,15 @@ export default function Home() {
 
           {page==='discover' && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
             <div className="mb-4 flex flex-col gap-3 md:flex-row"><div className="flex flex-1 items-center gap-2 rounded-lg border px-3" style={{borderColor:'var(--line)',background:'#0d1425'}}><Search size={16} className="text-slate-500"/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'){setCatalogPage(1);setSubmittedQuery(query);setCatalogLoaded(false);}}} placeholder={t.search} className="w-full bg-transparent py-3 text-xs outline-none"/><button type="button" onClick={()=>{setCatalogPage(1);setSubmittedQuery(query);setCatalogLoaded(false);}} className="rounded-md bg-indigo-500/20 px-3 py-2 text-xs text-indigo-200">Rechercher</button></div><select value={category} onChange={e=>setCategory(e.target.value)} className="rounded-lg border px-3 py-2 text-xs" style={{background:'#0d1425',borderColor:'var(--line)'}}><option value="All">{t.all}</option><option value="Moderation">{t.moderation}</option><option value="Music">{t.music}</option><option value="Games">{t.games}</option><option value="Utilities">{t.utility}</option></select></div>
-            <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({catalogTotal})</span></div>
+            <div className="mb-3 text-xs font-semibold">{t.allBots} <span className="text-slate-500">({catalogTotal} affichés)</span></div>
             {catalogLoading && <p className="py-6 text-center text-xs text-slate-400">Chargement du catalogue réel…</p>}
-            {catalogLoaded && !catalogLoading && catalogBots.length > 0 && <div className="mb-3 text-[10px] text-slate-500">Page {catalogPage} / {catalogPages} · Source : Topbot.gg</div> }
+            {catalogLoaded && !catalogLoading && catalogBots.length > 0 && <div className="mb-3 text-[10px] text-slate-500">Page {catalogPage} / {catalogPages} · Topbot.gg : {catalogSourceCounts.topbot} · Discord : {catalogSourceCounts.discord} bots affichés sur cette page</div> }
             {catalogError && <p className="py-6 text-center text-xs text-amber-300">{catalogError}</p>}
             {!catalogLoading && !catalogError && catalogBots.length === 0 && <p className="py-6 text-center text-xs text-slate-400">Aucun bot disponible pour le moment.</p>}
             
 {filteredBots.length ? filteredBots.map(bot => (
   <div
-    key={bot.name}
+    key={bot.id}
     className="rounded-xl border border-slate-700/50 overflow-hidden mb-2"
   >
     <button
@@ -455,7 +459,7 @@ export default function Home() {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
           {bot.name}
-          <span className="rounded-full bg-slate-700/60 px-2 py-0.5 text-[9px] text-slate-300">{bot.source}</span>
+          {bot.sources.map(source => <span key={source} className="rounded-full bg-slate-700/60 px-2 py-0.5 text-[9px] text-slate-300">{source === 'Discord' ? 'Discord' : 'Topbot.gg'}</span>)}
           {bot.verified && (
             <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] text-emerald-300">
               {t.verified}
@@ -468,11 +472,11 @@ export default function Home() {
       </div>
 
       <span className="text-xs text-violet-300">
-        {selectedDiscoverBot === bot.name ? '−' : '+'}
+        {selectedDiscoverBot === bot.id ? '−' : '+'}
       </span>
     </button>
 
-    {selectedDiscoverBot === bot.name && (
+    {selectedDiscoverBot === bot.id && (
       <div className="border-t border-slate-700/50 p-4">
         <h3 className="mb-2 text-sm font-semibold">{bot.name}</h3>
         <p className="text-xs text-slate-400">
