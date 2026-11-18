@@ -81,8 +81,8 @@ export async function GET(request: NextRequest) {
       available: true,
       days,
       totals: {
-        visits: days.reduce((sum, day) => sum + day.visits, 0),
-        interactions: days.reduce((sum, day) => sum + day.interactions, 0),
+        visits: days.slice(-7).reduce((sum, day) => sum + day.visits, 0),
+        interactions: days.slice(-7).reduce((sum, day) => sum + day.interactions, 0),
         activeAccounts: last7ActiveAccounts.size,
       },
       totals30: {
