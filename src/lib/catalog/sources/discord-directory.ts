@@ -167,11 +167,12 @@ async function discordJson(url: URL): Promise<unknown> {
 export async function fetchDiscordDirectoryCategories(locale = "fr"): Promise<unknown[]> {
   const url = new URL("https://discord.com/api/v10/application-directory-static/categories");
   url.searchParams.set("locale", locale);
-  const payload = asRecord(await discordJson(url));
-  const categories = Array.isArray(payload.categories)
-    ? payload.categories
-    : Array.isArray(payload)
-      ? payload
+  const response = await discordJson(url);
+  const payload = asRecord(response);
+  const categories = Array.isArray(response)
+    ? response
+    : Array.isArray(payload.categories)
+      ? payload.categories
       : null;
   if (!categories) throw new DiscordDirectoryError("DISCORD_DIRECTORY_INVALID_CATEGORIES");
   return categories;
