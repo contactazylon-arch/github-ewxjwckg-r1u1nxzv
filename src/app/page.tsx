@@ -223,7 +223,7 @@ export default function Home() {
     const discordParams = new URLSearchParams({
       page: String(catalogPage),
       limit: '50',
-      locale: lang === 'fr' ? 'fr' : 'en',
+      locale: lang === 'fr' ? 'fr' : 'en-US',
     });
     if (submittedQuery.trim()) discordParams.set('search', submittedQuery.trim());
 
