@@ -64,7 +64,7 @@ const copy = {
   }
 } as const;
 
-type DiscoverBot = { id:string; name:string; category:string; description:string; tag:string; verified:boolean; letter:string; tone:string; inviteUrl:string|null; websiteUrl:string|null; };
+type DiscoverBot = { id:string; name:string; category:string; description:string; tag:string; verified:boolean; letter:string; tone:string; inviteUrl:string|null; websiteUrl:string|null; iconUrl:string|null; source:'Topbot.gg'|'Discord'; };
 type CatalogApiBot = {
   id?: unknown;
   name?: unknown;
@@ -74,6 +74,7 @@ type CatalogApiBot = {
   verified?: unknown;
   inviteUrl?: unknown;
   websiteUrl?: unknown;
+  iconUrl?: unknown;
 };
 
 
@@ -207,50 +208,98 @@ export default function Home() {
     setCatalogLoading(true);
     const params = new URLSearchParams({ page: String(catalogPage), limit: '50', sort: 'votes_month' });
     if (submittedQuery.trim()) params.set('search', submittedQuery.trim());
-    fetch('/api/catalog/bots?' + params.toString())
-      .then(async response => {
+    const discordParams = new URLSearchParams({
+      page: String(catalogPage),
+      limit: '50',
+      locale: lang === 'fr' ? 'fr' : 'en',
+    });
+    if (submittedQuery.trim()) discordParams.set('search', submittedQuery.trim());
+
+    const mapBot = (bot: CatalogApiBot, source: 'Topbot.gg' | 'Discord'): DiscoverBot => ({
+      id: String(bot.id),
+      name: String(bot.name || 'Bot Discord'),
+      category: Array.isArray(bot.categories) && bot.categories.length ? String(bot.categories[0]) : 'Utilities',
+      description: String(bot.description || ''),
+      tag: Array.isArray(bot.tags) && bot.tags.length ? String(bot.tags[0]) : 'Discord bot',
+      verified: bot.verified === true,
+      letter: String(bot.name || 'B').charAt(0).toUpperCase(),
+      tone: source === 'Discord' ? 'purple' : 'blue',
+      inviteUrl: typeof bot.inviteUrl === 'string' ? bot.inviteUrl : null,
+      websiteUrl: typeof bot.websiteUrl === 'string' ? bot.websiteUrl : null,
+      iconUrl: typeof bot.iconUrl === 'string' ? bot.iconUrl : null,
+      source,
+    });
+
+    Promise.allSettled([
+      fetch('/api/catalog/bots?' + params.toString()).then(async response => {
         if (!response.ok) {
           const details = await response.json().catch(() => ({})) as { upstreamStatus?: number; diagnostic?: string };
           const message = details.upstreamStatus
             ? `Topbot.gg répond HTTP ${details.upstreamStatus}.`
             : details.diagnostic === 'upstream_timeout'
               ? 'Topbot.gg ne répond pas dans le délai prévu.'
-              : details.diagnostic === 'upstream_invalid_json'
-                ? 'Topbot.gg a renvoyé une réponse invalide.'
-                : 'Connexion à Topbot.gg impossible.';
+              : 'Connexion à Topbot.gg impossible.';
           throw new Error(message);
         }
         return response.json() as Promise<{ bots?: CatalogApiBot[]; pagination?: { pages?: number | string; total?: number | string } }>;
-      })
-      .then(data => {
-        if (!active) return;
-        const rows = Array.isArray(data.bots) ? data.bots : [];
-        setCatalogPages(Number(data.pagination?.pages) || 1);
-        setCatalogTotal(Number(data.pagination?.total) || rows.length);
-        setCatalogBots(rows.map((bot: CatalogApiBot) => ({
-          id: String(bot.id),
-          name: String(bot.name || 'Bot Discord'),
-          category: Array.isArray(bot.categories) && bot.categories.length ? String(bot.categories[0]) : 'Utilities',
-          description: String(bot.description || ''),
-          tag: Array.isArray(bot.tags) && bot.tags.length ? String(bot.tags[0]) : 'Discord bot',
-          verified: bot.verified === true,
-          letter: String(bot.name || 'B').charAt(0).toUpperCase(),
-          tone: 'blue',
-          inviteUrl: typeof bot.inviteUrl === 'string' ? bot.inviteUrl : null,
-          websiteUrl: typeof bot.websiteUrl === 'string' ? bot.websiteUrl : null
-        })));
-      })
-      .catch((error: unknown) => { if (active) setCatalogError(error instanceof Error ? error.message : 'Catalogue indisponible.'); })
-      .finally(() => { if (active) { setCatalogLoading(false); setCatalogLoaded(true); } });
+      }),
+      fetch('/api/catalog/discord?' + discordParams.toString()).then(async response => {
+        if (!response.ok) {
+          const details = await response.json().catch(() => ({})) as { diagnostic?: string };
+          throw new Error(details.diagnostic || 'Annuaire Discord temporairement indisponible.');
+        }
+        return response.json() as Promise<{ bots?: CatalogApiBot[]; pagination?: { pages?: number | string; totalDirectoryResults?: number | string | null } }>;
+      }),
+    ]).then(results => {
+      if (!active) return;
+      const topbot = results[0].status === 'fulfilled' ? results[0].value : null;
+      const discord = results[1].status === 'fulfilled' ? results[1].value : null;
+      const topbotRows = Array.isArray(topbot?.bots) ? topbot.bots : [];
+      const discordRows = Array.isArray(discord?.bots) ? discord.bots : [];
+      const combined = [...topbotRows.map(bot => mapBot(bot, 'Topbot.gg')), ...discordRows.map(bot => mapBot(bot, 'Discord'))];
+      const unique = new Map<string, DiscoverBot>();
+      for (const bot of combined) {
+        const key = bot.id.trim();
+        if (!key) continue;
+        const existing = unique.get(key);
+        if (!existing) unique.set(key, bot);
+        else {
+          unique.set(key, {
+            ...existing,
+            description: existing.description || bot.description,
+            iconUrl: existing.iconUrl || bot.iconUrl,
+            inviteUrl: existing.inviteUrl || bot.inviteUrl,
+            websiteUrl: existing.websiteUrl || bot.websiteUrl,
+            verified: existing.verified || bot.verified,
+            tag: existing.tag || bot.tag,
+          });
+        }
+      }
+      const rows = Array.from(unique.values());
+      setCatalogBots(rows);
+      setCatalogPages(Math.max(1, Number(topbot?.pagination?.pages) || 1, Number(discord?.pagination?.pages) || 1));
+      setCatalogTotal(rows.length);
+      const failures = results.filter(result => result.status === 'rejected');
+      if (failures.length === 2) {
+        setCatalogError('Les catalogues Topbot.gg et Discord sont momentanément indisponibles.');
+      } else if (failures.length === 1) {
+        const reason = failures[0].status === 'rejected' ? failures[0].reason : null;
+        setCatalogError(reason instanceof Error ? reason.message : 'Une source du catalogue est indisponible.');
+      }
+    }).catch((error: unknown) => {
+      if (active) setCatalogError(error instanceof Error ? error.message : 'Catalogue indisponible.');
+    }).finally(() => {
+      if (active) { setCatalogLoading(false); setCatalogLoaded(true); }
+    });
     return () => { active = false; };
-  }, [page, catalogPage, submittedQuery]);
+  }, [page, catalogPage, submittedQuery, lang]);
 
   const [mobileOpen,setMobileOpen] = useState(false);
   const t = copy[lang];
 
   useEffect(() => {
     if (lang !== 'fr' || !selectedDiscoverBot) return;
-    const selectedBot = catalogBots.find(bot => bot.name === selectedDiscoverBot);
+    const selectedBot = catalogBots.find(bot => bot.id === selectedDiscoverBot);
     if (!selectedBot?.description.trim() || translatedDescriptions[selectedBot.id] || translationErrors[selectedBot.id]) return;
 
     let active = true;
@@ -386,10 +435,10 @@ export default function Home() {
       type="button"
       onClick={() =>
         setSelectedDiscoverBot(
-          selectedDiscoverBot === bot.name ? null : bot.name
+          selectedDiscoverBot === bot.id ? null : bot.id
         )
       }
-      aria-expanded={selectedDiscoverBot === bot.name}
+      aria-expanded={selectedDiscoverBot === bot.id}
       className="flex w-full items-center gap-3 p-3 text-left hover:bg-white/5 transition"
     >
       <div
@@ -400,12 +449,13 @@ export default function Home() {
             bot.tone === 'green' ? '#245d58' : '#65451e'
         }}
       >
-        {bot.letter}
+        {bot.iconUrl ? <img src={bot.iconUrl} alt="" className="h-full w-full rounded-xl object-cover" /> : bot.letter}
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
           {bot.name}
+          <span className="rounded-full bg-slate-700/60 px-2 py-0.5 text-[9px] text-slate-300">{bot.source}</span>
           {bot.verified && (
             <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[9px] text-emerald-300">
               {t.verified}
@@ -438,13 +488,13 @@ export default function Home() {
           <p className="mt-2 text-[10px] text-emerald-300">Traduction automatique · Cloudflare AI</p>
         )}
         <div className="mt-3 text-[10px] text-violet-300">
-          {bot.tag} · {bot.category}
+          {bot.tag} · {bot.category} · {bot.source}
         </div>
         <div className="mt-3 flex flex-wrap gap-3 text-xs">
           {bot.inviteUrl && <a href={bot.inviteUrl} target="_blank" rel="noopener noreferrer" className="text-indigo-300 hover:text-indigo-200">Inviter le bot ↗</a>}
           {bot.websiteUrl && <a href={bot.websiteUrl} target="_blank" rel="noopener noreferrer" className="text-slate-300 hover:text-white">Site officiel ↗</a>}
         </div>
-        {bot.verified && <div className="mt-3 text-[10px] text-emerald-300">Statut vérifié attribué par Topbot.gg</div>}
+        {bot.verified && <div className="mt-3 text-[10px] text-emerald-300">{bot.source === 'Discord' ? 'Application vérifiée par Discord' : 'Statut vérifié attribué par Topbot.gg'}</div>}
       </div>
     )}
   </div>
@@ -453,7 +503,7 @@ export default function Home() {
     {t.noResults}
   </p>
 )}
-           <div className="mt-4 flex items-center justify-between"><p className="text-[10px] text-slate-500">Source : Topbot.gg · Catalogue public actualisé automatiquement.</p><div className="flex gap-2"><button disabled={catalogPage<=1 || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>Math.max(1,p-1))} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Précédent</button><button disabled={catalogPage>=catalogPages || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>p+1)} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Suivant</button></div></div>
+           <div className="mt-4 flex items-center justify-between"><p className="text-[10px] text-slate-500">Sources : Topbot.gg et annuaire officiel Discord · Résultats fusionnés par identifiant d’application.</p><div className="flex gap-2"><button disabled={catalogPage<=1 || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>Math.max(1,p-1))} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Précédent</button><button disabled={catalogPage>=catalogPages || catalogLoading || Boolean(submittedQuery)} onClick={()=>setCatalogPage(p=>p+1)} className="rounded-md border border-slate-700 px-3 py-2 text-xs disabled:opacity-40">Suivant</button></div></div>
           </section>}
 
           {page==='servers' && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
