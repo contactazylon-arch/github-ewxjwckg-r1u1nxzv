@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
 
     const days: { date: string; visits: number; interactions: number; activeAccounts: number }[] = [];
     const eventTotals: Record<string, number> = {};
+    const allActiveAccounts = new Set<string>();
     for (let offset = 6; offset >= 0; offset -= 1) {
       const date = utcDate(offset);
       const [visitKeys, interactionKeys] = await Promise.all([
@@ -60,7 +61,7 @@ export async function GET(request: NextRequest) {
         const parts = key.split(":");
         const event = parts[5] ?? "unknown";
         const accountHash = parts[6] ?? "";
-        if (accountHash) accounts.add(accountHash);
+        if (accountHash) { accounts.add(accountHash); allActiveAccounts.add(accountHash); }
         eventTotals[event] = (eventTotals[event] ?? 0) + 1;
       }
       days.push({ date, visits: visitKeys.length, interactions: interactionKeys.length, activeAccounts: accounts.size });
@@ -72,7 +73,7 @@ export async function GET(request: NextRequest) {
       totals: {
         visits: days.reduce((sum, day) => sum + day.visits, 0),
         interactions: days.reduce((sum, day) => sum + day.interactions, 0),
-        activeAccounts: days.reduce((sum, day) => sum + day.activeAccounts, 0),
+        activeAccounts: allActiveAccounts.size,
       },
       eventTotals,
       retentionDays: 30,
