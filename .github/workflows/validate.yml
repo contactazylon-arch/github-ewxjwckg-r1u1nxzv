@@ -63,6 +63,26 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Discord App Directory API smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/catalog/discord?page=1&limit=10&locale=en";
+          const response = await fetch(endpoint, {
+            headers: { Accept: "application/json" },
+            signal: AbortSignal.timeout(30000),
+          });
+          const payload = await response.json().catch(() => null);
+          console.log(`Discord directory API HTTP ${response.status}`);
+          console.log("Discord directory response:", JSON.stringify(payload));
+          if (!response.ok) throw new Error(`Discord directory API returned HTTP ${response.status}`);
+          if (!payload || !Array.isArray(payload.bots) || !payload.pagination) {
+            throw new Error("Discord directory API returned an unexpected response shape");
+          }
+          if (payload.bots.length === 0) {
+            throw new Error("Discord directory API returned no bot records");
+          }
+          console.log(`Discord App Directory smoke test passed with ${payload.bots.length} bot records.`);
+          NODE
       - name: Translation API smoke test
         run: |
           node --input-type=module <<'NODE'
