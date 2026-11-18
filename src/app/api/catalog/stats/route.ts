@@ -60,7 +60,9 @@ export async function GET() {
   const kv = bindings.VINEXT_KV_CACHE;
   const [topbotResult, discordResult, kvAvailable] = await Promise.all([
     fetchTopbotBots({ page: 1, limit: 1, sort: "votes_month" }).then(value => ({ status: "fulfilled" as const, value })).catch(reason => ({ status: "rejected" as const, reason })),
-    fetchDiscordDirectoryBots({ page: 1, pageSize: 1, locale: "fr" }).then(value => ({ status: "fulfilled" as const, value })).catch(reason => ({ status: "rejected" as const, reason })),
+    // Discord's directory endpoint is validated with a page size of 10 in the catalogue smoke test.
+    // Keep the dashboard health check on that same supported request shape.
+    fetchDiscordDirectoryBots({ page: 1, pageSize: 10, locale: "fr" }).then(value => ({ status: "fulfilled" as const, value })).catch(reason => ({ status: "rejected" as const, reason })),
     kv ? checkKV(kv) : Promise.resolve(false),
   ]);
 
