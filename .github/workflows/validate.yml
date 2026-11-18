@@ -59,9 +59,11 @@ jobs:
         run: npm run lint
       - name: Production build
         run: npm run build:vinext
-      - name: Select isolated test Worker
+      - name: Select isolated test Worker and KV
         run: |
           sed -i 's/name: "botnexus-app"/name: "botnexus-test"/' cloudflare.config.ts
+          sed -i 's/9f2ada965d204276b8300f7d8f81e961/cfad87e83aa24e579ea921c6f539ec5d/' cloudflare.config.ts
+          sed -i 's#https://botnexus-app.contact-azylon.workers.dev/api/auth/discord/callback#https://botnexus-test.contact-azylon.workers.dev/api/auth/discord/callback#' cloudflare.config.ts
       - name: Deploy test Worker to Cloudflare
         run: npm run deploy:vinext
         env:
