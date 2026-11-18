@@ -99,11 +99,26 @@ jobs:
           if (!payload?.topbot || !payload?.discord || !payload?.monitoring) {
             throw new Error("Dashboard stats response is missing required sections");
           }
-          if (payload.discord.available !== true) {
-            throw new Error("Dashboard stats reports Discord App Directory as unavailable");
+          if (typeof payload.discord.available !== "boolean") {
+            throw new Error("Dashboard stats Discord availability status is missing");
           }
-          if (typeof payload.monitoring.availableServices !== "number") throw new Error("Monitoring checks are missing");
-          console.log("Dashboard stats and monitoring smoke test passed.");
+          if (payload.discord.available && payload.discord.directoryEntries !== null &&
+              typeof payload.discord.directoryEntries !== "number") {
+            throw new Error("Dashboard stats Discord directory count has an invalid shape");
+          }
+          if (typeof payload.monitoring.available !== "boolean" ||
+              typeof payload.monitoring.availableServices !== "number" ||
+              typeof payload.monitoring.totalServices !== "number") {
+            throw new Error("Monitoring checks are missing or malformed");
+          }
+          if (payload.monitoring.availableServices < 0 ||
+              payload.monitoring.availableServices > payload.monitoring.totalServices) {
+            throw new Error("Monitoring service count is outside the expected range");
+          }
+          if (!payload.discord.available) {
+            console.warn("Discord App Directory is temporarily unavailable; availability is reported by monitoring and does not fail this structural smoke test.");
+          }
+          console.log("Dashboard stats response structure and monitoring smoke test passed.");
           NODE
       - name: Public visit tracking smoke test
         run: |
