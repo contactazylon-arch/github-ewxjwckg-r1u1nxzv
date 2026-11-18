@@ -95,6 +95,9 @@ jobs:
           if (!payload?.topbot || !payload?.discord || !payload?.monitoring || !payload?.activity) {
             throw new Error("Dashboard stats response is missing required sections");
           }
+          if (payload.discord.available !== true) {
+            throw new Error("Dashboard stats reports Discord App Directory as unavailable");
+          }
           if (typeof payload.monitoring.availableServices !== "number") throw new Error("Monitoring checks are missing");
           console.log("Dashboard stats and monitoring smoke test passed.");
           NODE
