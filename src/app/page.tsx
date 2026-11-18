@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, Bell, Bot, ChevronDown, Compass, Globe2,
   LayoutDashboard, Search, Settings, Sparkles, Users, Plus,
@@ -10,7 +10,7 @@ import {
 type Lang = 'fr' | 'en';
 type Page = 'overview' | 'discover' | 'servers' | 'studio' | 'alerts' | 'settings';
 type DiscordGuild = { id: string; name: string; icon: string | null; owner: boolean; permissions: string };
-type DashboardStats = { topbot: { available: boolean; total: number | null }; discord: { available: boolean; directoryEntries: number | null; coverage: string | null }; updatedAt: string };
+type DashboardStats = { topbot: { available: boolean; total: number | null }; discord: { available: boolean; directoryEntries: number | null; coverage: string | null }; monitoring: { available: boolean; availableServices: number; totalServices: number }; activity: { available: boolean; days: { date: string; count: number }[]; total: number }; updatedAt: string };
 
 const copy = {
   fr: {
@@ -18,7 +18,7 @@ const copy = {
     alerts:'Notifications', settings:'Paramètres', personal:'ESPACE PERSONNEL',
     subtitle:'Retrouvez votre écosystème Discord en un seul endroit.',
     add:'Ajouter un bot', serversConnected:'Serveurs Discord accessibles', listedBots:'Bots Topbot.gg', directoryEntries:'Références de l’annuaire Discord',
-    monitored:'Surveillance', openAlerts:'Alertes', activity:'Activité réelle de la plateforme',
+    monitored:'Surveillance en direct', openAlerts:'Alertes', activity:'Activité réelle de la plateforme',
     week:'7 derniers jours', system:'État des services', api:'API BotNexus', database:'Base de données',
     monitoring:'Monitoring', demo:'Démonstration', recent:'Bots récemment consultés',
     directory:'Voir l’annuaire', recommendations:'Recommandations pour votre serveur',
@@ -32,8 +32,8 @@ const copy = {
     create:'Créer un projet', noProjects:'Aucun projet connecté pour le moment.',
     alertsText:'Les alertes de disponibilité nécessiteront une intégration de monitoring.',
     account:'Compte et préférences', language:'Langue de l’interface', french:'Français', english:'Anglais',
-    sample:'Aucune donnée d’activité réelle n’est encore enregistrée.',
-    statusOnline:'Disponible', statusDemo:'Non configuré', statusUnavailable:'Indisponible', statusUnknown:'Non vérifié', profile:'Utilisateur invité', connectDiscord:'Se connecter avec Discord',
+    sample:'Les interactions sont agrégées par compte Discord connecté, sans conserver votre identifiant.',
+    statusOnline:'Disponible', statusDemo:'Non configuré', statusUnavailable:'Indisponible', statusUnknown:'Non vérifié', activityEmpty:'Aucune interaction mesurée sur les 7 derniers jours.', profile:'Utilisateur invité', connectDiscord:'Se connecter avec Discord',
     directoryIntro:'Explorez le catalogue et trouvez les outils adaptés à vos communautés.',
     allBots:'Catalogue multi-source', catalogSource:'Total communiqué par Topbot.gg', noResults:'Aucun bot ne correspond à cette recherche.',
     serversIntro:'Retrouvez les serveurs associés à votre compte Discord et vos droits sur chacun.', refresh:'Actualiser', loadingServers:'Récupération de vos serveurs Discord…', noServers:'Aucun serveur Discord n’a été retourné pour ce compte.', noManageServers:'Aucun serveur ne vous accorde actuellement les droits de gestion.', manageAccess:'Gestion disponible', limitedAccess:'Accès limité', owner:'Propriétaire', searchServers:'Rechercher un serveur…', allServers:'Tous', manageableOnly:'Gestion possible', guildError:'Impossible de récupérer vos serveurs Discord. Réessayez dans un instant.', backToServers:'Retour à mes serveurs', serverId:'Identifiant du serveur', serverAccess:'Vos droits sur ce serveur', serverManageInfo:'Vous disposez des droits nécessaires pour accéder aux futures fonctions de gestion BotNexus.', serverLimitedInfo:'Vous pouvez consulter les informations du serveur, mais votre compte ne dispose pas des droits de gestion nécessaires.', openDiscord:'Ouvrir dans Discord', viewServer:'Consulter le serveur'
@@ -43,7 +43,7 @@ const copy = {
     alerts:'Notifications', settings:'Settings', personal:'PERSONAL SPACE',
     subtitle:'Your Discord ecosystem, all in one place.',
     add:'Add a bot', serversConnected:'Accessible Discord servers', listedBots:'Topbot.gg bots', directoryEntries:'Discord directory entries',
-    monitored:'Monitoring', openAlerts:'Alerts', activity:'Real platform activity',
+    monitored:'Live service checks', openAlerts:'Alerts', activity:'Real platform activity',
     week:'Last 7 days', system:'Service status', api:'BotNexus API', database:'Database',
     monitoring:'Monitoring', demo:'Demo', recent:'Recently viewed bots',
     directory:'View directory', recommendations:'Recommendations for your server',
@@ -57,8 +57,8 @@ const copy = {
     create:'Create a project', noProjects:'No connected projects yet.',
     alertsText:'Availability alerts will require a monitoring integration.',
     account:'Account and preferences', language:'Interface language', french:'French', english:'English',
-    sample:'No real platform activity has been recorded yet.',
-    statusOnline:'Available', statusDemo:'Not configured', statusUnavailable:'Unavailable', statusUnknown:'Not checked', profile:'Guest user', connectDiscord:'Connect with Discord',
+    sample:'Interactions are aggregated per connected Discord account without retaining your account ID.',
+    statusOnline:'Available', statusDemo:'Not configured', statusUnavailable:'Unavailable', statusUnknown:'Not checked', activityEmpty:'No interactions measured in the last 7 days.', profile:'Guest user', connectDiscord:'Connect with Discord',
     directoryIntro:'Explore the catalogue and find tools for your communities.',
     allBots:'Multi-source catalogue', catalogSource:'Total reported by Topbot.gg', noResults:'No bots match this search.',
     serversIntro:'View the servers linked to your Discord account and your permissions for each one.', refresh:'Refresh', loadingServers:'Loading your Discord servers…', noServers:'No Discord servers were returned for this account.', noManageServers:'You do not currently have management permissions on any server.', manageAccess:'Management available', limitedAccess:'Limited access', owner:'Owner', searchServers:'Search servers…', allServers:'All', manageableOnly:'Can manage', guildError:'Unable to retrieve your Discord servers. Please try again.', backToServers:'Back to my servers', serverId:'Server ID', serverAccess:'Your access to this server', serverManageInfo:'You have the permissions required to access future BotNexus management features.', serverLimitedInfo:'You can view this server information, but your account does not have management permissions.', openDiscord:'Open in Discord', viewServer:'View server'
@@ -302,6 +302,31 @@ export default function Home() {
   const [mobileOpen,setMobileOpen] = useState(false);
   const t = copy[lang];
 
+  const recordActivity = useCallback((event: string) => {
+    if (!discordUser) return;
+    void fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event }),
+      keepalive: true,
+    }).then(response => {
+      if (response.ok && event === 'page_overview') {
+        return fetch('/api/catalog/stats', { cache: 'no-store' })
+          .then(statsResponse => statsResponse.ok ? statsResponse.json() as Promise<DashboardStats> : null)
+          .then(data => { if (data) setDashboardStats(data); });
+      }
+      return undefined;
+    }).catch(() => undefined);
+  }, [discordUser?.id]);
+
+  useEffect(() => {
+    if (discordUser) recordActivity(`page_${page}`);
+  }, [page, discordUser?.id, recordActivity]);
+
+  useEffect(() => {
+    if (discordUser && page === 'discover' && selectedDiscoverBot) recordActivity('bot_detail');
+  }, [selectedDiscoverBot, page, discordUser?.id, recordActivity]);
+
   useEffect(() => {
     if (lang !== 'fr' || !selectedDiscoverBot) return;
     const selectedBot = catalogBots.find(bot => bot.id === selectedDiscoverBot);
@@ -400,25 +425,25 @@ export default function Home() {
                 {label:t.serversConnected,value:discordGuildCount === null ? '—' : discordGuildCount.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US'),sub:discordUser ? (guildsUnavailable ? t.statusUnavailable : t.statusOnline) : t.connectDiscord,icon:Users,color:'#8da8ff'},
                 {label:t.listedBots,value:dashboardStatsLoading ? '…' : dashboardStats?.topbot.total == null ? '—' : dashboardStats.topbot.total.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US'),sub:dashboardStatsLoading ? '…' : dashboardStats?.topbot.available ? t.catalogSource : dashboardStats ? t.statusUnavailable : t.statusUnknown,icon:Bot,color:'#b69bff'},
                 {label:t.directoryEntries,value:dashboardStatsLoading ? '…' : dashboardStats?.discord.directoryEntries == null ? '—' : dashboardStats.discord.directoryEntries.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US'),sub:dashboardStatsLoading ? '…' : dashboardStats?.discord.available ? (lang === 'fr' ? 'Entrées de recherche communiquées par Discord' : 'Search entries reported by Discord') : dashboardStats ? t.statusUnavailable : t.statusUnknown,icon:Globe2,color:'#64dcb2'},
-                {label:t.monitored,value:t.statusDemo,sub:lang === 'fr' ? 'Aucune intégration de monitoring active' : 'No monitoring integration is active',icon:Activity,color:'#f3c477'},
+                {label:t.monitored,value:dashboardStatsLoading ? '…' : dashboardStats ? `${dashboardStats.monitoring.availableServices}/${dashboardStats.monitoring.totalServices}` : '—',sub:dashboardStatsLoading ? '…' : dashboardStats?.monitoring.available ? (lang === 'fr' ? 'Contrôles de disponibilité actifs' : 'Availability checks active') : (lang === 'fr' ? 'Stockage de métriques indisponible' : 'Metrics storage unavailable'),icon:Activity,color:'#f3c477'},
               ].map((m,i)=>{const Icon=m.icon;return <div className="rounded-xl border p-4" style={{background:'var(--panel)',borderColor:'var(--line)'}} key={i}><div className="flex items-center justify-between text-[11px] text-slate-400">{m.label}<Icon size={16} style={{color:m.color}}/></div><div className="mt-3 text-2xl font-extrabold tracking-tight">{m.value}</div><div className="mt-1 text-[10px] text-slate-500">{m.sub}</div></div>})}
             </div>
             <div className="mb-4 grid gap-4 xl:grid-cols-[1.7fr_1fr]">
               <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
-                <div className="mb-4 flex items-center justify-between"><h2 className="text-sm font-semibold">{t.activity}</h2><span className="rounded-full bg-slate-700/60 px-2.5 py-1 text-[10px] text-slate-300">{lang === 'fr' ? 'En attente de données' : 'Awaiting data'}</span></div>
-                <div className="flex min-h-32 flex-col items-center justify-center rounded-lg border border-dashed border-slate-700/70 px-4 py-6 text-center">
-                  <Activity size={22} className="mb-2 text-slate-500"/>
-                  <p className="text-xs font-medium text-slate-300">{lang === 'fr' ? 'Aucune activité mesurée pour le moment' : 'No measured activity yet'}</p>
-                  <p className="mt-1 max-w-md text-[10px] leading-5 text-slate-500">{t.sample}</p>
-                </div>
+                <div className="mb-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t.activity}</h2><span className="rounded-full bg-slate-700/60 px-2.5 py-1 text-[10px] text-slate-300">{dashboardStatsLoading ? '…' : (lang === 'fr' ? '7 derniers jours' : 'Last 7 days')}</span></div>
+                {dashboardStats?.activity.available && dashboardStats.activity.total > 0 ? <>
+                  <div className="flex h-32 items-end gap-2 px-1">{dashboardStats.activity.days.map((day,index)=><div key={day.date} className="flex flex-1 flex-col items-center justify-end"><div className="w-full rounded-t-md" style={{height:`${Math.max(4, day.count / Math.max(1, ...dashboardStats.activity.days.map(item => item.count)) * 100)}%`,background:index===dashboardStats.activity.days.length-1?'#9278f4':'#465caa'}} title={`${day.date}: ${day.count}`}/></div>)}</div>
+                  <div className="mt-2 flex justify-between text-[10px] text-slate-500">{dashboardStats.activity.days.map(day=><span key={day.date}>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US',{weekday:'short',timeZone:'UTC'})}</span>)}</div>
+                  <p className="mt-4 text-[10px] text-slate-500">{lang === 'fr' ? `${dashboardStats.activity.total.toLocaleString('fr-FR')} interactions uniques par compte et par type · conservation 30 jours` : `${dashboardStats.activity.total.toLocaleString('en-US')} unique account/action interactions · 30-day retention`}</p>
+                </> : <div className="flex min-h-32 flex-col items-center justify-center rounded-lg border border-dashed border-slate-700/70 px-4 py-6 text-center"><Activity size={22} className="mb-2 text-slate-500"/><p className="text-xs font-medium text-slate-300">{t.activityEmpty}</p><p className="mt-1 max-w-md text-[10px] leading-5 text-slate-500">{t.sample}</p></div>}
               </section>
               <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
                 <h2 className="mb-4 text-sm font-semibold">{t.system}</h2>
                 {[
                   {label:'Topbot.gg',ok:dashboardStats?.topbot.available === true},
                   {label:'Discord App Directory',ok:dashboardStats?.discord.available === true},
-                  {label:t.monitoring,ok:false},
-                ].map((x,i)=><div key={i} className="flex items-center justify-between border-b border-slate-700/50 py-3 last:border-0"><div className="flex items-center gap-2 text-xs"><span className={`h-2 w-2 rounded-full ${x.ok?'bg-emerald-400':'bg-amber-400'}`}/>{x.label}</div><span className={`rounded-full px-2 py-1 text-[9px] ${x.ok?'bg-emerald-500/10 text-emerald-300':'bg-amber-500/10 text-amber-300'}`}>{dashboardStatsLoading ? '…' : dashboardStats === null ? t.statusUnknown : x.ok ? t.statusOnline : x.label === t.monitoring ? t.statusDemo : t.statusUnavailable}</span></div>)}
+                  {label:'Cloudflare KV',ok:dashboardStats?.monitoring.available === true},
+                ].map((x,i)=><div key={i} className="flex items-center justify-between border-b border-slate-700/50 py-3 last:border-0"><div className="flex items-center gap-2 text-xs"><span className={`h-2 w-2 rounded-full ${x.ok?'bg-emerald-400':'bg-amber-400'}`}/>{x.label}</div><span className={`rounded-full px-2 py-1 text-[9px] ${x.ok?'bg-emerald-500/10 text-emerald-300':'bg-amber-500/10 text-amber-300'}`}>{dashboardStatsLoading ? '…' : dashboardStats === null ? t.statusUnknown : x.ok ? t.statusOnline : t.statusUnavailable}</span></div>)}
                 <p className="mt-3 text-[10px] leading-5 text-slate-500">{lang === 'fr' ? 'Le compteur Discord correspond aux entrées de recherche par catégorie, pas à un décompte garanti de bots uniques.' : 'The Discord count reflects category search entries, not a guaranteed count of unique bots.'}</p>
               </section>
             </div>

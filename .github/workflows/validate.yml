@@ -83,6 +83,38 @@ jobs:
           }
           console.log(`Discord App Directory smoke test passed with ${payload.bots.length} bot records.`);
           NODE
+      - name: Dashboard stats and monitoring smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/catalog/stats";
+          const response = await fetch(endpoint, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(30000) });
+          const payload = await response.json().catch(() => null);
+          console.log(`Dashboard stats API HTTP ${response.status}`);
+          console.log("Dashboard stats response:", JSON.stringify(payload));
+          if (!response.ok) throw new Error(`Dashboard stats API returned HTTP ${response.status}`);
+          if (!payload?.topbot || !payload?.discord || !payload?.monitoring || !payload?.activity) {
+            throw new Error("Dashboard stats response is missing required sections");
+          }
+          if (typeof payload.monitoring.availableServices !== "number") throw new Error("Monitoring checks are missing");
+          console.log("Dashboard stats and monitoring smoke test passed.");
+          NODE
+      - name: Activity tracking authentication smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/activity";
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ event: "page_overview" }),
+            signal: AbortSignal.timeout(15000),
+          });
+          const payload = await response.json().catch(() => null);
+          console.log(`Activity API unauthenticated HTTP ${response.status}`);
+          if (response.status !== 401 || payload?.reason !== "authentication_required") {
+            throw new Error("Activity endpoint must reject unauthenticated events");
+          }
+          console.log("Activity tracking authentication smoke test passed.");
+          NODE
       - name: Translation API smoke test
         run: |
           node --input-type=module <<'NODE'
