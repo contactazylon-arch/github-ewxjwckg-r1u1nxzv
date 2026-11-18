@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bell, Bot, ChevronDown, Compass, Globe2,
   LayoutDashboard, Search, Settings, Sparkles, Users, Plus,
@@ -10,7 +10,8 @@ import {
 type Lang = 'fr' | 'en';
 type Page = 'overview' | 'discover' | 'servers' | 'studio' | 'alerts' | 'settings';
 type DiscordGuild = { id: string; name: string; icon: string | null; owner: boolean; permissions: string };
-type DashboardStats = { topbot: { available: boolean; total: number | null }; discord: { available: boolean; directoryEntries: number | null; coverage: string | null }; monitoring: { available: boolean; availableServices: number; totalServices: number }; activity: { available: boolean; days: { date: string; count: number }[]; total: number }; updatedAt: string };
+type DashboardStats = { topbot: { available: boolean; total: number | null }; discord: { available: boolean; directoryEntries: number | null; coverage: string | null }; monitoring: { available: boolean; availableServices: number; totalServices: number }; updatedAt: string };
+type AdminAnalytics = { available: boolean; days: { date: string; visits: number; interactions: number; activeAccounts: number }[]; totals: { visits: number; interactions: number; activeAccounts: number }; eventTotals: Record<string, number>; retentionDays: number; updatedAt: string };
 
 const copy = {
   fr: {
@@ -116,21 +117,27 @@ export default function Home() {
   const [manageableOnly, setManageableOnly] = useState(false);
   const [selectedGuildId, setSelectedGuildId] = useState<string | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminAnalytics, setAdminAnalytics] = useState<AdminAnalytics | null>(null);
+  const [adminAnalyticsLoading, setAdminAnalyticsLoading] = useState(false);
+  const lastTrackedVisitPage = useRef<Page | null>(null);
 
   useEffect(() => {
     let active = true;
     fetch('/api/auth/session', { cache: 'no-store' })
-      .then(response => response.ok ? response.json() as Promise<{ authenticated?: boolean; user?: { id: string; username: string; globalName: string | null; avatar: string | null }; guilds?: DiscordGuild[]; guildsUnavailable?: boolean }> : null)
+      .then(response => response.ok ? response.json() as Promise<{ authenticated?: boolean; user?: { id: string; username: string; globalName: string | null; avatar: string | null }; isAdmin?: boolean; guilds?: DiscordGuild[]; guildsUnavailable?: boolean }> : null)
       .then(data => {
         if (!active) return;
         if (data?.authenticated && data.user) {
           const guilds = Array.isArray(data.guilds) ? data.guilds : [];
           setDiscordUser(data.user);
+          setIsAdmin(data.isAdmin === true);
           setDiscordGuilds(guilds);
           setDiscordGuildCount(data.guildsUnavailable ? null : guilds.length);
           setGuildsUnavailable(data.guildsUnavailable === true);
         } else {
           setDiscordUser(null);
+          setIsAdmin(false);
           setDiscordGuilds([]);
           setDiscordGuildCount(null);
           setGuildsUnavailable(false);
@@ -145,6 +152,8 @@ export default function Home() {
     const response = await fetch('/api/auth/logout', { method: 'POST' });
     if (response.ok) {
       setDiscordUser(null);
+      setIsAdmin(false);
+      setAdminAnalytics(null);
       setDiscordGuildCount(null);
       setDiscordGuilds([]);
       setGuildsUnavailable(false);
@@ -307,25 +316,44 @@ export default function Home() {
     void fetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ event }),
+      body: JSON.stringify({ type: 'interaction', event }),
       keepalive: true,
-    }).then(response => {
-      if (response.ok && event === 'page_overview') {
-        return fetch('/api/catalog/stats', { cache: 'no-store' })
-          .then(statsResponse => statsResponse.ok ? statsResponse.json() as Promise<DashboardStats> : null)
-          .then(data => { if (data) setDashboardStats(data); });
-      }
-      return undefined;
     }).catch(() => undefined);
   }, [discordUser?.id]);
 
   useEffect(() => {
+    if (lastTrackedVisitPage.current === page) return;
+    lastTrackedVisitPage.current = page;
+    void fetch('/api/activity', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'visit', page }),
+      keepalive: true,
+    }).catch(() => undefined);
     if (discordUser) recordActivity(`page_${page}`);
   }, [page, discordUser?.id, recordActivity]);
 
   useEffect(() => {
     if (discordUser && page === 'discover' && selectedDiscoverBot) recordActivity('bot_detail');
   }, [selectedDiscoverBot, page, discordUser?.id, recordActivity]);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setAdminAnalytics(null);
+      return;
+    }
+    let active = true;
+    setAdminAnalyticsLoading(true);
+    fetch('/api/admin/analytics', { cache: 'no-store' })
+      .then(response => {
+        if (!response.ok) throw new Error('admin_analytics_unavailable');
+        return response.json() as Promise<AdminAnalytics>;
+      })
+      .then(data => { if (active) setAdminAnalytics(data); })
+      .catch(() => { if (active) setAdminAnalytics(null); })
+      .finally(() => { if (active) setAdminAnalyticsLoading(false); });
+    return () => { active = false; };
+  }, [isAdmin]);
 
   useEffect(() => {
     if (lang !== 'fr' || !selectedDiscoverBot) return;
@@ -429,14 +457,21 @@ export default function Home() {
               ].map((m,i)=>{const Icon=m.icon;return <div className="rounded-xl border p-4" style={{background:'var(--panel)',borderColor:'var(--line)'}} key={i}><div className="flex items-center justify-between text-[11px] text-slate-400">{m.label}<Icon size={16} style={{color:m.color}}/></div><div className="mt-3 text-2xl font-extrabold tracking-tight">{m.value}</div><div className="mt-1 text-[10px] text-slate-500">{m.sub}</div></div>})}
             </div>
             <div className="mb-4 grid gap-4 xl:grid-cols-[1.7fr_1fr]">
-              <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
-                <div className="mb-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t.activity}</h2><span className="rounded-full bg-slate-700/60 px-2.5 py-1 text-[10px] text-slate-300">{dashboardStatsLoading ? '…' : (lang === 'fr' ? '7 derniers jours' : 'Last 7 days')}</span></div>
-                {dashboardStats?.activity.available && dashboardStats.activity.total > 0 ? <>
-                  <div className="flex h-32 items-end gap-2 px-1">{dashboardStats.activity.days.map((day,index)=><div key={day.date} className="flex flex-1 flex-col items-center justify-end"><div className="w-full rounded-t-md" style={{height:`${Math.max(4, day.count / Math.max(1, ...dashboardStats.activity.days.map(item => item.count)) * 100)}%`,background:index===dashboardStats.activity.days.length-1?'#9278f4':'#465caa'}} title={`${day.date}: ${day.count}`}/></div>)}</div>
-                  <div className="mt-2 flex justify-between text-[10px] text-slate-500">{dashboardStats.activity.days.map(day=><span key={day.date}>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US',{weekday:'short',timeZone:'UTC'})}</span>)}</div>
-                  <p className="mt-4 text-[10px] text-slate-500">{lang === 'fr' ? `${dashboardStats.activity.total.toLocaleString('fr-FR')} interactions uniques par compte et par type · conservation 30 jours` : `${dashboardStats.activity.total.toLocaleString('en-US')} unique account/action interactions · 30-day retention`}</p>
-                </> : <div className="flex min-h-32 flex-col items-center justify-center rounded-lg border border-dashed border-slate-700/70 px-4 py-6 text-center"><Activity size={22} className="mb-2 text-slate-500"/><p className="text-xs font-medium text-slate-300">{t.activityEmpty}</p><p className="mt-1 max-w-md text-[10px] leading-5 text-slate-500">{t.sample}</p></div>}
-              </section>
+              {isAdmin && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
+                <div className="mb-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t.activity}</h2><span className="rounded-full bg-slate-700/60 px-2.5 py-1 text-[10px] text-slate-300">{lang === 'fr' ? '7 derniers jours' : 'Last 7 days'}</span></div>
+                {adminAnalyticsLoading && <p className="py-8 text-center text-xs text-slate-400">Chargement des statistiques administrateur…</p>}
+                {!adminAnalyticsLoading && adminAnalytics && <>
+                  <div className="mb-4 grid grid-cols-3 gap-2">
+                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Visites' : 'Visits'}</div><div className="mt-1 text-lg font-bold">{adminAnalytics.totals.visits.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
+                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Interactions' : 'Interactions'}</div><div className="mt-1 text-lg font-bold">{adminAnalytics.totals.interactions.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
+                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Comptes actifs' : 'Active accounts'}</div><div className="mt-1 text-lg font-bold">{adminAnalytics.totals.activeAccounts.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
+                  </div>
+                  <div className="flex h-32 items-end gap-2 px-1">{adminAnalytics.days.map((day,index)=>{const max=Math.max(1,...adminAnalytics.days.map(item=>Math.max(item.visits,item.interactions)));return <div key={day.date} className="flex h-full flex-1 items-end justify-center gap-1"><div className="w-1/2 rounded-t-sm" style={{height:`${Math.max(2,day.visits/max*100)}%`,background:'#9278f4'}} title={`${day.date}: ${day.visits} visites`}/><div className="w-1/2 rounded-t-sm" style={{height:`${Math.max(2,day.interactions/max*100)}%`,background:'#36cfa7'}} title={`${day.date}: ${day.interactions} interactions`}/></div>})}</div>
+                  <div className="mt-2 flex justify-between text-[10px] text-slate-500">{adminAnalytics.days.map(day=><span key={day.date}>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US',{weekday:'short',timeZone:'UTC'})}</span>)}</div>
+                  <p className="mt-4 text-[10px] text-slate-500">{lang === 'fr' ? `Visites publiques et interactions authentifiées · conservation ${adminAnalytics.retentionDays} jours` : `Public visits and authenticated interactions · ${adminAnalytics.retentionDays}-day retention`}</p>
+                </>}
+                {!adminAnalyticsLoading && !adminAnalytics && <div className="py-8 text-center text-xs text-amber-300">{lang === 'fr' ? 'Statistiques administrateur indisponibles. Vérifiez la configuration des administrateurs.' : 'Admin analytics unavailable. Check administrator configuration.'}</div>}
+              </section>}
               <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
                 <h2 className="mb-4 text-sm font-semibold">{t.system}</h2>
                 {[
