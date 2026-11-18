@@ -330,6 +330,9 @@ export default function Home() {
       body: JSON.stringify({ type: 'visit', page }),
       keepalive: true,
     }).catch(() => undefined);
+  }, [page]);
+
+  useEffect(() => {
     if (discordUser) recordActivity(`page_${page}`);
   }, [page, discordUser?.id, recordActivity]);
 
