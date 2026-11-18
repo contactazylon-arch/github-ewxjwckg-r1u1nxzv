@@ -1,0 +1,95 @@
+name: Deploy BotNexus Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: "I confirm that this workflow will deploy to the public botnexus-app Worker."
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: botnexus-production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: inputs.confirm_production == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Cloudflare binding types
+        run: npx cf workers types
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: Production build
+        run: npm run build:vinext
+
+      - name: Deploy public Worker
+        run: npm run deploy:vinext
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Verify public site
+        run: |
+          node --input-type=module <<'NODE'
+          const url = "https://botnexus-app.contact-azylon.workers.dev/";
+          const response = await fetch(url, {
+            headers: { Accept: "text/html" },
+            redirect: "follow",
+            signal: AbortSignal.timeout(30000),
+          });
+          console.log(`Production homepage HTTP ${response.status}`);
+          if (!response.ok) throw new Error(`Production homepage returned HTTP ${response.status}`);
+          const html = await response.text();
+          if (!html.toLowerCase().includes("botnexus")) {
+            throw new Error("Production homepage response does not contain the BotNexus marker");
+          }
+          console.log("Production homepage smoke test passed.");
+          NODE
+
+      - name: Verify translation endpoint
+        run: |
+          node --input-type=module <<'NODE'
+          const url = "https://botnexus-app.contact-azylon.workers.dev/api/translate";
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ text: "This Discord bot helps you manage your server." }),
+            signal: AbortSignal.timeout(30000),
+          });
+          const payload = await response.json().catch(() => null);
+          console.log(`Production translation API HTTP ${response.status}`);
+          if (!response.ok) throw new Error(`Production translation API returned HTTP ${response.status}`);
+          if (!payload || typeof payload.translatedText !== "string" || !payload.translatedText.trim()) {
+            throw new Error("Production translation API did not return translatedText");
+          }
+          console.log("Production translation smoke test passed.");
+          NODE
