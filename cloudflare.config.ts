@@ -18,6 +18,7 @@ export default defineConfig({
       DISCORD_CLIENT_SECRET: bindings.secret(),
       DISCORD_REDIRECT_URI: bindings.text("https://botnexus-app.contact-azylon.workers.dev/api/auth/discord/callback"),
       BOTNEXUS_SESSION_KEY: bindings.secret(),
+      BOTNEXUS_ADMIN_IDS: bindings.secret(),
     },
   }),
 });
