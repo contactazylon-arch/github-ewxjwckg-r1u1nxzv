@@ -7,41 +7,10 @@ export const runtime = "edge";
 export const revalidate = 300;
 
 type ActivityKV = {
-  list: (options: { prefix: string; limit?: number; cursor?: string }) => Promise<{
-    keys: { name: string }[];
-    list_complete: boolean;
-    cursor?: string;
-  }>;
   get: (key: string, type: "text") => Promise<string | null>;
   put: (key: string, value: string, options?: { expirationTtl?: number }) => Promise<void>;
   delete: (key: string) => Promise<void>;
 };
-
-function utcDate(daysAgo: number): string {
-  return new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
-}
-
-async function readActivity(kv: ActivityKV) {
-  const days: { date: string; count: number }[] = [];
-  for (let offset = 6; offset >= 0; offset -= 1) {
-    const date = utcDate(offset);
-    let count = 0;
-    let cursor: string | undefined;
-    let pages = 0;
-    do {
-      const result = await kv.list({
-        prefix: `botnexus:activity:v1:${date}:`,
-        limit: 1000,
-        ...(cursor ? { cursor } : {}),
-      });
-      count += result.keys.length;
-      cursor = result.list_complete ? undefined : result.cursor;
-      pages += 1;
-    } while (cursor && pages < 5);
-    days.push({ date, count });
-  }
-  return { available: true, days, total: days.reduce((sum, day) => sum + day.count, 0) };
-}
 
 async function checkKV(kv: ActivityKV): Promise<boolean> {
   const key = `botnexus:health:dashboard:${crypto.randomUUID()}`;
@@ -78,22 +47,12 @@ export async function GET() {
       }
     : { available: false, directoryEntries: null, coverage: null };
 
-  let activity = { available: false, days: [] as { date: string; count: number }[], total: 0 };
-  if (kvAvailable && kv) {
-    try {
-      activity = await readActivity(kv);
-    } catch (error) {
-      console.error("[BotNexus activity] KV read failed:", error);
-    }
-  }
-
   const availableServices = Number(topbot.available) + Number(discord.available) + Number(kvAvailable);
   return NextResponse.json(
     {
       topbot,
       discord,
       monitoring: { available: kvAvailable, availableServices, totalServices: 3 },
-      activity,
       updatedAt: new Date().toISOString(),
     },
     { headers: { "Cache-Control": "no-store" } },
