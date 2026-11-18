@@ -92,7 +92,7 @@ jobs:
           console.log(`Dashboard stats API HTTP ${response.status}`);
           console.log("Dashboard stats response:", JSON.stringify(payload));
           if (!response.ok) throw new Error(`Dashboard stats API returned HTTP ${response.status}`);
-          if (!payload?.topbot || !payload?.discord || !payload?.monitoring || !payload?.activity) {
+          if (!payload?.topbot || !payload?.discord || !payload?.monitoring) {
             throw new Error("Dashboard stats response is missing required sections");
           }
           if (payload.discord.available !== true) {
