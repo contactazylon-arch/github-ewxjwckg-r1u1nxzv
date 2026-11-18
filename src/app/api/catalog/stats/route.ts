@@ -31,7 +31,7 @@ export async function GET() {
     fetchTopbotBots({ page: 1, limit: 1, sort: "votes_month" }).then(value => ({ status: "fulfilled" as const, value })).catch(reason => ({ status: "rejected" as const, reason })),
     // Discord's directory endpoint is validated with a page size of 10 in the catalogue smoke test.
     // Keep the dashboard health check on that same supported request shape.
-    fetchDiscordDirectoryBots({ page: 1, pageSize: 10, locale: "en" }).then(value => ({ status: "fulfilled" as const, value })).catch(reason => ({ status: "rejected" as const, reason })),
+    fetchDiscordDirectoryBots({ page: 1, pageSize: 10, locale: "en-US" }).then(value => ({ status: "fulfilled" as const, value })).catch(reason => ({ status: "rejected" as const, reason })),
     kv ? checkKV(kv) : Promise.resolve(false),
   ]);
 
