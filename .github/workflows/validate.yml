@@ -1,5 +1,9 @@
 name: Validate BotNexus
 
+concurrency:
+  group: botnexus-test-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
@@ -55,14 +59,138 @@ jobs:
         run: npm run lint
       - name: Production build
         run: npm run build:vinext
-      - name: Select isolated test Worker
+      - name: Select isolated test Worker and KV
         run: |
           sed -i 's/name: "botnexus-app"/name: "botnexus-test"/' cloudflare.config.ts
+          sed -i 's/9f2ada965d204276b8300f7d8f81e961/cfad87e83aa24e579ea921c6f539ec5d/' cloudflare.config.ts
+          sed -i 's#https://botnexus-app.contact-azylon.workers.dev/api/auth/discord/callback#https://botnexus-test.contact-azylon.workers.dev/api/auth/discord/callback#' cloudflare.config.ts
       - name: Deploy test Worker to Cloudflare
         run: npm run deploy:vinext
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - name: Discord App Directory API smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/catalog/discord?page=1&limit=10&locale=en";
+          let response;
+          let payload;
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            response = await fetch(endpoint, {
+              headers: { Accept: "application/json" },
+              signal: AbortSignal.timeout(30000),
+            });
+            payload = await response.json().catch(() => null);
+            console.log(`Discord directory API attempt ${attempt}/3: HTTP ${response.status}`);
+            console.log("Discord directory response:", JSON.stringify(payload));
+            if (response.ok) break;
+            const transientUpstreamLimit =
+              (response.status === 429 || response.status === 503) &&
+              (payload?.diagnostic === "DISCORD_DIRECTORY_UPSTREAM_ERROR" ||
+               payload?.error === "discord_directory_unavailable");
+            if (!transientUpstreamLimit) {
+              throw new Error(`Discord directory API returned non-transient HTTP ${response.status}`);
+            }
+            if (attempt < 3) {
+              console.warn("Discord upstream is rate-limiting requests; retrying after 5 seconds.");
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+          }
+          if (!response.ok) {
+            const transientUpstreamLimit =
+              (response.status === 429 || response.status === 503) &&
+              (payload?.diagnostic === "DISCORD_DIRECTORY_UPSTREAM_ERROR" ||
+               payload?.error === "discord_directory_unavailable");
+            if (!transientUpstreamLimit) {
+              throw new Error(`Discord directory API returned HTTP ${response.status}`);
+            }
+            console.warn("Discord App Directory remains temporarily rate-limited after 3 attempts; availability is surfaced by the dashboard monitoring check.");
+          } else {
+            if (!payload || !Array.isArray(payload.bots) || !payload.pagination) {
+              throw new Error("Discord directory API returned an unexpected response shape");
+            }
+            if (payload.bots.length === 0) {
+              throw new Error("Discord directory API returned no bot records");
+            }
+            console.log(`Discord App Directory smoke test passed with ${payload.bots.length} bot records.`);
+          }
+          NODE
+      - name: Dashboard stats and monitoring smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/catalog/stats";
+          const response = await fetch(endpoint, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(30000) });
+          const payload = await response.json().catch(() => null);
+          console.log(`Dashboard stats API HTTP ${response.status}`);
+          console.log("Dashboard stats response:", JSON.stringify(payload));
+          if (!response.ok) throw new Error(`Dashboard stats API returned HTTP ${response.status}`);
+          if (!payload?.topbot || !payload?.discord || !payload?.monitoring) {
+            throw new Error("Dashboard stats response is missing required sections");
+          }
+          if (typeof payload.discord.available !== "boolean") {
+            throw new Error("Dashboard stats Discord availability status is missing");
+          }
+          if (payload.discord.available && payload.discord.directoryEntries !== null &&
+              typeof payload.discord.directoryEntries !== "number") {
+            throw new Error("Dashboard stats Discord directory count has an invalid shape");
+          }
+          if (typeof payload.monitoring.available !== "boolean" ||
+              typeof payload.monitoring.availableServices !== "number" ||
+              typeof payload.monitoring.totalServices !== "number") {
+            throw new Error("Monitoring checks are missing or malformed");
+          }
+          if (payload.monitoring.availableServices < 0 ||
+              payload.monitoring.availableServices > payload.monitoring.totalServices) {
+            throw new Error("Monitoring service count is outside the expected range");
+          }
+          if (!payload.discord.available) {
+            console.warn("Discord App Directory is temporarily unavailable; availability is reported by monitoring and does not fail this structural smoke test.");
+          }
+          console.log("Dashboard stats response structure and monitoring smoke test passed.");
+          NODE
+      - name: Public visit tracking smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/activity";
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ type: "visit", page: "overview" }),
+            signal: AbortSignal.timeout(15000),
+          });
+          const payload = await response.json().catch(() => null);
+          console.log(`Public visit tracking HTTP ${response.status}`);
+          if (!response.ok || payload?.recorded !== true || payload?.type !== "visit") {
+            throw new Error("Public visit event was not recorded");
+          }
+          NODE
+      - name: Activity interaction authentication smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/activity";
+          const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json" },
+            body: JSON.stringify({ type: "interaction", event: "page_overview" }),
+            signal: AbortSignal.timeout(15000),
+          });
+          const payload = await response.json().catch(() => null);
+          console.log(`Unauthenticated interaction HTTP ${response.status}`);
+          if (response.status !== 401 || payload?.reason !== "authentication_required") {
+            throw new Error("Authenticated interactions must reject anonymous requests");
+          }
+          NODE
+      - name: Admin analytics access control smoke test
+        run: |
+          node --input-type=module <<'NODE'
+          const endpoint = "https://botnexus-test.contact-azylon.workers.dev/api/admin/analytics";
+          const response = await fetch(endpoint, { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(15000) });
+          const payload = await response.json().catch(() => null);
+          console.log(`Unauthenticated admin analytics HTTP ${response.status}`);
+          if (response.status !== 401 || payload?.error !== "authentication_required") {
+            throw new Error("Admin analytics must reject unauthenticated requests");
+          }
+          NODE
       - name: Translation API smoke test
         run: |
           node --input-type=module <<'NODE'
