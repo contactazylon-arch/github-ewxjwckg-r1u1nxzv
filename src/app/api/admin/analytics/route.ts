@@ -47,30 +47,45 @@ export async function GET(request: NextRequest) {
     const kv = bindings.VINEXT_KV_CACHE;
     if (!kv) return NextResponse.json({ error: "activity_storage_unavailable" }, { status: 503, headers: { "Cache-Control": "no-store" } });
 
-    const days: { date: string; visits: number; interactions: number; activeAccounts: number }[] = [];
+    const days: { date: string; visits: number; interactions: number; activeAccounts: number; pages: Record<string, number> }[] = [];
     const eventTotals: Record<string, number> = {};
     const allActiveAccounts = new Set<string>();
-    for (let offset = 6; offset >= 0; offset -= 1) {
+    const last7ActiveAccounts = new Set<string>();
+    for (let offset = 29; offset >= 0; offset -= 1) {
       const date = utcDate(offset);
       const [visitKeys, interactionKeys] = await Promise.all([
         listKeys(kv, `botnexus:activity:v2:${date}:visits:`),
         listKeys(kv, `botnexus:activity:v2:${date}:interactions:`),
       ]);
       const accounts = new Set<string>();
+      const pages: Record<string, number> = {};
+      for (const key of visitKeys) {
+        const page = key.split(":")[5] ?? "unknown";
+        pages[page] = (pages[page] ?? 0) + 1;
+      }
       for (const key of interactionKeys) {
         const parts = key.split(":");
         const event = parts[5] ?? "unknown";
         const accountHash = parts[6] ?? "";
-        if (accountHash) { accounts.add(accountHash); allActiveAccounts.add(accountHash); }
+        if (accountHash) {
+          accounts.add(accountHash);
+          allActiveAccounts.add(accountHash);
+          if (offset < 7) last7ActiveAccounts.add(accountHash);
+        }
         eventTotals[event] = (eventTotals[event] ?? 0) + 1;
       }
-      days.push({ date, visits: visitKeys.length, interactions: interactionKeys.length, activeAccounts: accounts.size });
+      days.push({ date, visits: visitKeys.length, interactions: interactionKeys.length, activeAccounts: accounts.size, pages });
     }
 
     return NextResponse.json({
       available: true,
       days,
       totals: {
+        visits: days.reduce((sum, day) => sum + day.visits, 0),
+        interactions: days.reduce((sum, day) => sum + day.interactions, 0),
+        activeAccounts: last7ActiveAccounts.size,
+      },
+      totals30: {
         visits: days.reduce((sum, day) => sum + day.visits, 0),
         interactions: days.reduce((sum, day) => sum + day.interactions, 0),
         activeAccounts: allActiveAccounts.size,
