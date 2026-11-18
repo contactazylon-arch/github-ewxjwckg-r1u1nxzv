@@ -11,7 +11,7 @@ type Lang = 'fr' | 'en';
 type Page = 'overview' | 'discover' | 'servers' | 'studio' | 'alerts' | 'settings';
 type DiscordGuild = { id: string; name: string; icon: string | null; owner: boolean; permissions: string };
 type DashboardStats = { topbot: { available: boolean; total: number | null }; discord: { available: boolean; directoryEntries: number | null; coverage: string | null }; monitoring: { available: boolean; availableServices: number; totalServices: number }; updatedAt: string };
-type AdminAnalytics = { available: boolean; days: { date: string; visits: number; interactions: number; activeAccounts: number }[]; totals: { visits: number; interactions: number; activeAccounts: number }; eventTotals: Record<string, number>; retentionDays: number; updatedAt: string };
+type AdminAnalytics = { available: boolean; days: { date: string; visits: number; interactions: number; activeAccounts: number; pages: Record<string, number> }[]; totals: { visits: number; interactions: number; activeAccounts: number }; totals30: { visits: number; interactions: number; activeAccounts: number }; eventTotals: Record<string, number>; retentionDays: number; updatedAt: string };
 
 const copy = {
   fr: {
@@ -120,6 +120,7 @@ export default function Home() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminAnalytics, setAdminAnalytics] = useState<AdminAnalytics | null>(null);
   const [adminAnalyticsLoading, setAdminAnalyticsLoading] = useState(false);
+  const [analyticsRange, setAnalyticsRange] = useState<7 | 30>(7);
   const lastTrackedVisitPage = useRef<Page | null>(null);
 
   useEffect(() => {
@@ -397,6 +398,12 @@ export default function Home() {
   }),[catalogBots,submittedQuery,category]);
 
   const title = t[page === 'overview' ? 'overview' : page];
+  const analyticsDays = adminAnalytics?.days.slice(-analyticsRange) ?? [];
+  const analyticsTotals = analyticsRange === 30 ? adminAnalytics?.totals30 : adminAnalytics?.totals;
+  const analyticsPageTotals = analyticsDays.reduce<Record<string, number>>((totals, day) => {
+    for (const [pageName, count] of Object.entries(day.pages)) totals[pageName] = (totals[pageName] ?? 0) + count;
+    return totals;
+  }, {});
   const go = (next:Page) => { setPage(next); setMobileOpen(false); };
 
   return (
@@ -461,17 +468,18 @@ export default function Home() {
             </div>
             <div className={`mb-4 grid gap-4 ${isAdmin ? 'xl:grid-cols-[1.7fr_1fr]' : 'xl:grid-cols-1'}`}>
               {isAdmin && <section className="rounded-xl border p-4 md:p-5" style={{background:'var(--panel)',borderColor:'var(--line)'}}>
-                <div className="mb-4 flex items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t.activity}</h2><span className="rounded-full bg-slate-700/60 px-2.5 py-1 text-[10px] text-slate-300">{lang === 'fr' ? '7 derniers jours' : 'Last 7 days'}</span></div>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-semibold">{t.activity}</h2><div className="flex rounded-lg bg-slate-800/70 p-1"><button type="button" onClick={()=>setAnalyticsRange(7)} aria-pressed={analyticsRange===7} className={`rounded-md px-2.5 py-1 text-[10px] ${analyticsRange===7?'bg-violet-500/30 text-violet-200':'text-slate-400'}`}>{lang === 'fr' ? '7 jours' : '7 days'}</button><button type="button" onClick={()=>setAnalyticsRange(30)} aria-pressed={analyticsRange===30} className={`rounded-md px-2.5 py-1 text-[10px] ${analyticsRange===30?'bg-violet-500/30 text-violet-200':'text-slate-400'}`}>{lang === 'fr' ? '30 jours' : '30 days'}</button></div></div>
                 {adminAnalyticsLoading && <p className="py-8 text-center text-xs text-slate-400">Chargement des statistiques administrateur…</p>}
                 {!adminAnalyticsLoading && adminAnalytics && <>
                   <div className="mb-4 grid grid-cols-3 gap-2">
-                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Visites' : 'Visits'}</div><div className="mt-1 text-lg font-bold">{adminAnalytics.totals.visits.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
-                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Interactions' : 'Interactions'}</div><div className="mt-1 text-lg font-bold">{adminAnalytics.totals.interactions.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
-                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Comptes actifs' : 'Active accounts'}</div><div className="mt-1 text-lg font-bold">{adminAnalytics.totals.activeAccounts.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
+                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Visites' : 'Visits'}</div><div className="mt-1 text-lg font-bold">{(analyticsTotals?.visits ?? 0).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
+                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Interactions' : 'Interactions'}</div><div className="mt-1 text-lg font-bold">{(analyticsTotals?.interactions ?? 0).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
+                    <div className="rounded-lg bg-slate-800/60 p-2"><div className="text-[10px] text-slate-400">{lang === 'fr' ? 'Comptes actifs' : 'Active accounts'}</div><div className="mt-1 text-lg font-bold">{(analyticsTotals?.activeAccounts ?? 0).toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</div></div>
                   </div>
-                  <div className="flex h-32 items-end gap-2 px-1">{adminAnalytics.days.map((day,index)=>{const max=Math.max(1,...adminAnalytics.days.map(item=>Math.max(item.visits,item.interactions)));return <div key={day.date} className="flex h-full flex-1 items-end justify-center gap-1"><div className="w-1/2 rounded-t-sm" style={{height:`${Math.max(2,day.visits/max*100)}%`,background:'#9278f4'}} title={`${day.date}: ${day.visits} visites`}/><div className="w-1/2 rounded-t-sm" style={{height:`${Math.max(2,day.interactions/max*100)}%`,background:'#36cfa7'}} title={`${day.date}: ${day.interactions} interactions`}/></div>})}</div>
-                  <div className="mt-2 flex justify-between text-[10px] text-slate-500">{adminAnalytics.days.map(day=><span key={day.date}>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US',{weekday:'short',timeZone:'UTC'})}</span>)}</div>
-                  <p className="mt-4 text-[10px] text-slate-500">{lang === 'fr' ? `Visites publiques et interactions authentifiées · conservation ${adminAnalytics.retentionDays} jours` : `Public visits and authenticated interactions · ${adminAnalytics.retentionDays}-day retention`}</p>
+                  <div className="flex h-32 items-end gap-1 px-1">{analyticsDays.map(day=>{const max=Math.max(1,...analyticsDays.map(item=>Math.max(item.visits,item.interactions)));return <div key={day.date} className="flex h-full min-w-0 flex-1 items-end justify-center gap-px"><div className="w-1/2 rounded-t-sm" style={{height:`${Math.max(2,day.visits/max*100)}%`,background:'#9278f4'}} title={`${day.date}: ${day.visits} visites`}/><div className="w-1/2 rounded-t-sm" style={{height:`${Math.max(2,day.interactions/max*100)}%`,background:'#36cfa7'}} title={`${day.date}: ${day.interactions} interactions`}/></div>})}</div>
+                  <div className="mt-2 flex justify-between text-[10px] text-slate-500">{analyticsDays.filter((_,index)=>analyticsRange===7 || index%5===0 || index===analyticsDays.length-1).map(day=><span key={day.date}>{new Date(`${day.date}T12:00:00Z`).toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US',{day:'2-digit',month:'short',timeZone:'UTC'})}</span>)}</div>
+                  <div className="mt-5 border-t pt-4" style={{borderColor:'var(--line)'}}><h3 className="mb-3 text-xs font-semibold">{lang === 'fr' ? 'Pages les plus consultées' : 'Most viewed pages'}</h3><div className="space-y-2">{Object.entries(analyticsPageTotals).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([pageName,count])=><div key={pageName} className="flex items-center justify-between gap-3 text-[11px]"><span className="text-slate-300">{pageName}</span><span className="font-semibold tabular-nums text-violet-200">{count.toLocaleString(lang === 'fr' ? 'fr-FR' : 'en-US')}</span></div>)}{Object.keys(analyticsPageTotals).length===0 && <p className="text-[11px] text-slate-500">{lang === 'fr' ? 'Aucune page consultée sur cette période.' : 'No page views in this period.'}</p>}</div></div>
+                  <p className="mt-4 text-[10px] text-slate-500">{lang === 'fr' ? `Pages vues publiques et interactions authentifiées · conservation ${adminAnalytics.retentionDays} jours · les visites ne représentent pas des visiteurs uniques` : `Public page views and authenticated interactions · ${adminAnalytics.retentionDays}-day retention · visits are not unique visitors`}</p>
                 </>}
                 {!adminAnalyticsLoading && !adminAnalytics && <div className="py-8 text-center text-xs text-amber-300">{lang === 'fr' ? 'Statistiques administrateur indisponibles. Vérifiez la configuration des administrateurs.' : 'Admin analytics unavailable. Check administrator configuration.'}</div>}
               </section>}
