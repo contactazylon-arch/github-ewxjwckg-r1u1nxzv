@@ -14,7 +14,7 @@ To copy a Discord user ID: enable Developer Mode in Discord, open the user's pro
 ## Collection model
 
 - Public page views are counted without analytics cookies, IP addresses, device fingerprints, or visitor identifiers.
-- The visit metric represents page views, not unique visitors.
+- The visit metric represents page views, not unique visitors. No anonymous visitor identifier or session-duration tracking is collected.
 - Authenticated interactions require a valid BotNexus Discord session. Discord IDs are SHA-256 hashed before the event key is written to KV.
 - Raw analytics events expire after 30 days.
 - Detailed analytics are served only by `/api/admin/analytics`, which requires an authenticated session and an ID in `BOTNEXUS_ADMIN_IDS`.
