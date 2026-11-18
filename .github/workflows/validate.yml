@@ -1,5 +1,9 @@
 name: Validate BotNexus
 
+concurrency:
+  group: botnexus-test-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
